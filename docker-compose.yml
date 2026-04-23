@@ -1,0 +1,18 @@
+version: '3.8'
+
+services:
+  used-car-a2a-vnext:
+    build: .
+    ports:
+      - "8000:80"
+    environment:
+      - APP_MODE=${APP_MODE:-tool}
+      - DATABASE_URL=${DATABASE_URL:-}
+      - AI_API_KEY=${AI_API_KEY:-}
+      - AI_BASE_URL=${AI_BASE_URL:-}
+      - AI_MODEL=${AI_MODEL:-hunyuan-turbos-latest}
+      - ADMIN_TOKEN=${ADMIN_TOKEN:-}
+      - CORS_ORIGINS=${CORS_ORIGINS:-*}
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped
