@@ -42,6 +42,22 @@ uvicorn app:app --reload
 
 见 [DEPLOY_CLOUDBASE.md](/Users/fuhongbo/Documents/Antigravity/项目对比/used-car-a2a-vnext/DEPLOY_CLOUDBASE.md)
 
+## Vercel 首页部署
+
+这个仓库已经包含静态首页源码和 `vercel.json`。
+
+直接把 GitHub 仓库导入 Vercel 即可：
+
+1. 选择仓库 `used-car-a2a-vnext`
+2. 保持默认构建设置
+3. 不需要额外的 build command
+4. 首页根路径 `/` 会自动指向 `site/index.html`
+
+静态首页源码位于：
+
+- `site/index.html`
+- `site/styles.css`
+
 ## 开发同步规则
 
 开始任何本地或云端开发前先运行：
