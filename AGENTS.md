@@ -46,6 +46,22 @@ If such code exists historically, keep it disabled or out of the production entr
 - Preserve Chinese user-facing copy unless there is a reason to change it
 - Favor boring deployment over clever architecture
 
+## Sync Rule
+
+Before doing any analysis, edits, commits, or deployment work:
+
+1. Run `scripts/ensure_latest.sh`
+2. If the local branch is behind `origin/main`, fast-forward first
+3. If the worktree has local uncommitted changes, do not auto-pull over them
+4. If the branch has diverged, stop and resolve explicitly before continuing
+
+This rule applies to:
+
+- local work
+- cloud agent work
+- deployment preparation
+- bugfix / review / refactor work
+
 ## Required Checks Before Shipping
 
 1. `app.py` imports successfully
@@ -53,6 +69,7 @@ If such code exists historically, keep it disabled or out of the production entr
 3. `/` returns `mode=tool`
 4. Admin routes require `X-Admin-Token`
 5. No production path exposes payment / escrow / loan flows
+6. Working branch is synced with `origin/main` or divergence is explicitly handled
 
 ## Near-Term Priorities
 
@@ -60,4 +77,3 @@ If such code exists historically, keep it disabled or out of the production entr
 2. Replace local SQLite with CloudBase SQL in production
 3. Connect Mini Program frontend to `/api/v1/*`
 4. Add lightweight API regression tests for the production endpoints
-

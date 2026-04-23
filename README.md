@@ -42,6 +42,16 @@ uvicorn app:app --reload
 
 见 [DEPLOY_CLOUDBASE.md](/Users/fuhongbo/Documents/Antigravity/项目对比/used-car-a2a-vnext/DEPLOY_CLOUDBASE.md)
 
+## 开发同步规则
+
+开始任何本地或云端开发前先运行：
+
+```bash
+./scripts/ensure_latest.sh
+```
+
+详细说明见 [WORKFLOW.md](/Users/fuhongbo/Documents/Antigravity/项目对比/used-car-a2a-vnext/WORKFLOW.md)
+
 ## 上线入口
 
 - 正式服务入口: `app.py`
