@@ -149,6 +149,24 @@ class ReviewReportRequest(BaseModel):
     remark: Optional[str] = Field(None, description="审核备注")
 
 
+class DemandCreate(BaseModel):
+    user_id: int = Field(..., description="需求发布用户ID")
+    car_type: str = Field(..., description="目标车型类别")
+    budget_min: float = Field(..., description="最低预算")
+    budget_max: float = Field(..., description="最高预算")
+    brand_preference: Optional[str] = Field(None, description="品牌偏好")
+    series_preference: Optional[str] = Field(None, description="车系偏好")
+    region: Optional[str] = Field(None, description="地区偏好")
+    city: Optional[str] = Field(None, description="城市偏好")
+    year_min: Optional[int] = Field(None, description="最早接受年份")
+    year_max: Optional[int] = Field(None, description="最晚接受年份")
+    mileage_max: Optional[float] = Field(None, description="可接受最大里程")
+    priority: int = Field(5, ge=1, le=10, description="需求优先级")
+    preferences: Optional[Dict[str, Any]] = Field(None, description="额外偏好")
+    notes: Optional[str] = Field(None, description="备注")
+    notify_enabled: bool = Field(True, description="是否开启提醒")
+
+
 @app.get("/")
 async def root() -> Dict[str, Any]:
     return {
@@ -219,6 +237,67 @@ async def get_reputation_leaderboard(
 ) -> Dict[str, Any]:
     engine = ReputationEngine(db)
     return engine.get_leaderboard(limit=limit)
+
+
+@app.post("/api/v1/demands")
+async def create_demand(request: DemandCreate, db=Depends(get_db)) -> Dict[str, Any]:
+    memory = get_memory_service(db)
+    user = memory.get_user(request.user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="用户不存在")
+
+    demand = memory.create_demand(
+        user_id=request.user_id,
+        demand_id=f"DMD-{datetime.utcnow().strftime('%Y%m%d')}-{uuid4().hex[:6].upper()}",
+        car_type=request.car_type,
+        budget_min=request.budget_min,
+        budget_max=request.budget_max,
+        brand_preference=request.brand_preference,
+        series_preference=request.series_preference,
+        region=request.region,
+        city=request.city,
+        year_min=request.year_min,
+        year_max=request.year_max,
+        mileage_max=request.mileage_max,
+        priority=request.priority,
+        preferences=request.preferences,
+        notes=request.notes,
+        notify_enabled=request.notify_enabled,
+    )
+    return {"success": True, "message": "需求已进入意向大厅", "data": demand}
+
+
+@app.get("/api/v1/users/{user_id}/demands")
+async def get_user_demands(
+    user_id: int,
+    status: Optional[str] = Query(None),
+    db=Depends(get_db),
+) -> Dict[str, Any]:
+    memory = get_memory_service(db)
+    demands = memory.get_demands_by_user(user_id=user_id, status=status)
+    return {"success": True, "total": len(demands), "data": demands}
+
+
+@app.get("/api/v1/demands/{demand_id}")
+async def get_demand(demand_id: str, db=Depends(get_db)) -> Dict[str, Any]:
+    memory = get_memory_service(db)
+    demand = memory.get_demand(demand_id)
+    if not demand:
+        raise HTTPException(status_code=404, detail="需求不存在")
+    return {"success": True, "data": demand}
+
+
+@app.get("/api/v1/demands/{demand_id}/matches")
+async def get_demand_matches(
+    demand_id: str,
+    limit: int = Query(20, ge=1, le=100),
+    db=Depends(get_db),
+) -> Dict[str, Any]:
+    memory = get_memory_service(db)
+    result = memory.find_demand_matches(demand_id=demand_id, limit=limit)
+    if not result.get("success"):
+        raise HTTPException(status_code=404, detail=result.get("error", "需求不存在"))
+    return result
 
 
 @app.post("/api/v1/cars")
@@ -466,4 +545,3 @@ async def review_report(
         "data": report.to_dict(),
         "penalty_result": penalty_result,
     }
-

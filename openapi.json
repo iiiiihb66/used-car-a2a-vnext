@@ -1,120 +1,1862 @@
 {
   "openapi": "3.1.0",
   "info": {
-    "title": "Used Car A2A Intent Hall API",
-    "version": "0.1.0",
-    "description": "Tool-style API for used-car profile transparency, intent matching, and agent negotiation."
+    "title": "二手车 A2A 档案协商工具",
+    "description": "\n工具型二手车协作后端，聚焦车况档案、Agent 协商和信誉治理。\n\n不提供支付、托管、贷款或金融服务，仅作为信息整理与协商辅助工具。\n",
+    "version": "0.1.0"
   },
-  "servers": [
-    {
-      "url": "https://your-service-domain.example.com",
-      "description": "Replace with your deployed backend domain"
-    }
-  ],
   "paths": {
-    "/health": {
+    "/": {
       "get": {
-        "summary": "Health check",
+        "summary": "Root",
+        "operationId": "root__get",
         "responses": {
           "200": {
-            "description": "Healthy"
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Root  Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "summary": "Health",
+        "operationId": "health_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Health Health Get"
+                }
+              }
+            }
           }
         }
       }
     },
     "/api/v1/users": {
       "post": {
-        "summary": "Create user",
+        "summary": "Create User",
+        "operationId": "create_user_api_v1_users_post",
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
               "schema": {
-                "type": "object",
-                "required": ["name", "email"],
-                "properties": {
-                  "name": { "type": "string" },
-                  "email": { "type": "string" },
-                  "phone": { "type": "string" },
-                  "is_dealer": { "type": "boolean" }
-                }
+                "$ref": "#/components/schemas/UserCreate"
               }
             }
           }
         },
         "responses": {
-          "200": { "description": "User created" }
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Create User Api V1 Users Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
         }
       },
       "get": {
-        "summary": "List users",
+        "summary": "List Users",
+        "operationId": "list_users_api_v1_users_get",
+        "parameters": [
+          {
+            "name": "is_dealer",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Is Dealer"
+            }
+          }
+        ],
         "responses": {
-          "200": { "description": "Users listed" }
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response List Users Api V1 Users Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
         }
       }
     },
-    "/api/v1/cars": {
-      "post": {
-        "summary": "Create vehicle profile",
+    "/api/v1/users/{user_id}": {
+      "get": {
+        "summary": "Get User",
+        "operationId": "get_user_api_v1_users__user_id__get",
         "parameters": [
           {
             "name": "user_id",
-            "in": "query",
-            "required": true,
-            "schema": { "type": "integer" }
-          }
-        ],
-        "responses": {
-          "200": { "description": "Vehicle created" }
-        }
-      },
-      "get": {
-        "summary": "List vehicle profiles",
-        "responses": {
-          "200": { "description": "Vehicles listed" }
-        }
-      }
-    },
-    "/api/v1/cars/{car_id}/verify": {
-      "get": {
-        "summary": "Verify tamper-evident lifecycle chain",
-        "parameters": [
-          {
-            "name": "car_id",
             "in": "path",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "integer",
+              "title": "User Id"
+            }
           }
         ],
         "responses": {
-          "200": { "description": "Verification result" }
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Get User Api V1 Users  User Id  Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
         }
       }
     },
-    "/api/v1/agent/inquiry": {
-      "post": {
-        "summary": "Agent sends inquiry",
+    "/api/v1/users/{user_id}/reputation": {
+      "get": {
+        "summary": "Get User Reputation",
+        "operationId": "get_user_reputation_api_v1_users__user_id__reputation_get",
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "User Id"
+            }
+          }
+        ],
         "responses": {
-          "200": { "description": "Inquiry processed" }
-        }
-      }
-    },
-    "/api/v1/agent/negotiate": {
-      "post": {
-        "summary": "Agent sends negotiation proposal",
-        "responses": {
-          "200": { "description": "Negotiation processed" }
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Get User Reputation Api V1 Users  User Id  Reputation Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
         }
       }
     },
     "/api/v1/reputation/leaderboard": {
       "get": {
-        "summary": "Get reputation leaderboard",
+        "summary": "Get Reputation Leaderboard",
+        "operationId": "get_reputation_leaderboard_api_v1_reputation_leaderboard_get",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 10,
+              "title": "Limit"
+            }
+          }
+        ],
         "responses": {
-          "200": { "description": "Leaderboard returned" }
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Get Reputation Leaderboard Api V1 Reputation Leaderboard Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
         }
+      }
+    },
+    "/api/v1/demands": {
+      "post": {
+        "summary": "Create Demand",
+        "operationId": "create_demand_api_v1_demands_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DemandCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Create Demand Api V1 Demands Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/users/{user_id}/demands": {
+      "get": {
+        "summary": "Get User Demands",
+        "operationId": "get_user_demands_api_v1_users__user_id__demands_get",
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "User Id"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Get User Demands Api V1 Users  User Id  Demands Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/demands/{demand_id}": {
+      "get": {
+        "summary": "Get Demand",
+        "operationId": "get_demand_api_v1_demands__demand_id__get",
+        "parameters": [
+          {
+            "name": "demand_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Demand Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Get Demand Api V1 Demands  Demand Id  Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/demands/{demand_id}/matches": {
+      "get": {
+        "summary": "Get Demand Matches",
+        "operationId": "get_demand_matches_api_v1_demands__demand_id__matches_get",
+        "parameters": [
+          {
+            "name": "demand_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Demand Id"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 20,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Get Demand Matches Api V1 Demands  Demand Id  Matches Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/cars": {
+      "post": {
+        "summary": "Create Car",
+        "operationId": "create_car_api_v1_cars_post",
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "description": "车主用户ID",
+              "title": "User Id"
+            },
+            "description": "车主用户ID"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CarCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Create Car Api V1 Cars Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "summary": "List Cars",
+        "operationId": "list_cars_api_v1_cars_get",
+        "parameters": [
+          {
+            "name": "brand",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Brand"
+            }
+          },
+          {
+            "name": "min_price",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Min Price"
+            }
+          },
+          {
+            "name": "max_price",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Max Price"
+            }
+          },
+          {
+            "name": "region",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Region"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response List Cars Api V1 Cars Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/cars/{car_id}": {
+      "get": {
+        "summary": "Get Car",
+        "operationId": "get_car_api_v1_cars__car_id__get",
+        "parameters": [
+          {
+            "name": "car_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Car Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Get Car Api V1 Cars  Car Id  Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/users/{user_id}/cars": {
+      "get": {
+        "summary": "Get User Cars",
+        "operationId": "get_user_cars_api_v1_users__user_id__cars_get",
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "User Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Get User Cars Api V1 Users  User Id  Cars Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/cars/{car_id}/records": {
+      "post": {
+        "summary": "Add Car Record",
+        "operationId": "add_car_record_api_v1_cars__car_id__records_post",
+        "parameters": [
+          {
+            "name": "car_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Car Id"
+            }
+          },
+          {
+            "name": "user_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "description": "录入者用户ID",
+              "title": "User Id"
+            },
+            "description": "录入者用户ID"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LifecycleRecordCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Add Car Record Api V1 Cars  Car Id  Records Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "summary": "Get Car Records",
+        "operationId": "get_car_records_api_v1_cars__car_id__records_get",
+        "parameters": [
+          {
+            "name": "car_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Car Id"
+            }
+          },
+          {
+            "name": "record_type",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Record Type"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Get Car Records Api V1 Cars  Car Id  Records Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/cars/{car_id}/verify": {
+      "get": {
+        "summary": "Verify Car Chain",
+        "operationId": "verify_car_chain_api_v1_cars__car_id__verify_get",
+        "parameters": [
+          {
+            "name": "car_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Car Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Verify Car Chain Api V1 Cars  Car Id  Verify Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/agent/inquiry": {
+      "post": {
+        "summary": "Send Inquiry",
+        "operationId": "send_inquiry_api_v1_agent_inquiry_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InquiryRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Send Inquiry Api V1 Agent Inquiry Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/agent/negotiate": {
+      "post": {
+        "summary": "Send Negotiate",
+        "operationId": "send_negotiate_api_v1_agent_negotiate_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NegotiateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Send Negotiate Api V1 Agent Negotiate Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/agent/deal-intent": {
+      "post": {
+        "summary": "Send Deal Intent",
+        "operationId": "send_deal_intent_api_v1_agent_deal_intent_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DealIntentRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Send Deal Intent Api V1 Agent Deal Intent Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/conversations/{user_id}": {
+      "get": {
+        "summary": "Get Conversations",
+        "operationId": "get_conversations_api_v1_conversations__user_id__get",
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "User Id"
+            }
+          },
+          {
+            "name": "other_user_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Other User Id"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Get Conversations Api V1 Conversations  User Id  Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/reports/seller": {
+      "post": {
+        "summary": "Report Seller",
+        "operationId": "report_seller_api_v1_reports_seller_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SellerReportCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Report Seller Api V1 Reports Seller Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/reports": {
+      "get": {
+        "summary": "List Reports",
+        "operationId": "list_reports_api_v1_admin_reports_get",
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "X-Admin-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Admin-Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response List Reports Api V1 Admin Reports Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/reports/review": {
+      "post": {
+        "summary": "Review Report",
+        "operationId": "review_report_api_v1_admin_reports_review_post",
+        "parameters": [
+          {
+            "name": "X-Admin-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Admin-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReviewReportRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Review Report Api V1 Admin Reports Review Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "CarCreate": {
+        "properties": {
+          "brand": {
+            "type": "string",
+            "title": "Brand",
+            "description": "品牌"
+          },
+          "model": {
+            "type": "string",
+            "title": "Model",
+            "description": "车型"
+          },
+          "year": {
+            "type": "integer",
+            "title": "Year",
+            "description": "年份"
+          },
+          "price": {
+            "type": "number",
+            "title": "Price",
+            "description": "展示价格"
+          },
+          "mileage": {
+            "type": "number",
+            "title": "Mileage",
+            "description": "里程"
+          },
+          "color": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Color",
+            "description": "颜色"
+          },
+          "region": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region",
+            "description": "地区"
+          },
+          "city": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "City",
+            "description": "城市"
+          },
+          "transmission": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Transmission",
+            "description": "变速箱",
+            "default": "自动"
+          },
+          "fuel_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fuel Type",
+            "description": "燃料类型",
+            "default": "汽油"
+          },
+          "series": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Series",
+            "description": "车系"
+          },
+          "original_price": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Original Price",
+            "description": "新车价"
+          },
+          "target_price": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Price",
+            "description": "目标成交价"
+          }
+        },
+        "type": "object",
+        "required": [
+          "brand",
+          "model",
+          "year",
+          "price",
+          "mileage"
+        ],
+        "title": "CarCreate"
+      },
+      "DealIntentRequest": {
+        "properties": {
+          "buyer_id": {
+            "type": "integer",
+            "title": "Buyer Id",
+            "description": "买家用户ID"
+          },
+          "seller_id": {
+            "type": "integer",
+            "title": "Seller Id",
+            "description": "卖家用户ID"
+          },
+          "car_id": {
+            "type": "string",
+            "title": "Car Id",
+            "description": "车辆ID"
+          },
+          "agreed_price": {
+            "type": "number",
+            "title": "Agreed Price",
+            "description": "双方协商价格"
+          }
+        },
+        "type": "object",
+        "required": [
+          "buyer_id",
+          "seller_id",
+          "car_id",
+          "agreed_price"
+        ],
+        "title": "DealIntentRequest"
+      },
+      "DemandCreate": {
+        "properties": {
+          "user_id": {
+            "type": "integer",
+            "title": "User Id",
+            "description": "需求发布用户ID"
+          },
+          "car_type": {
+            "type": "string",
+            "title": "Car Type",
+            "description": "目标车型类别"
+          },
+          "budget_min": {
+            "type": "number",
+            "title": "Budget Min",
+            "description": "最低预算"
+          },
+          "budget_max": {
+            "type": "number",
+            "title": "Budget Max",
+            "description": "最高预算"
+          },
+          "brand_preference": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Brand Preference",
+            "description": "品牌偏好"
+          },
+          "series_preference": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Series Preference",
+            "description": "车系偏好"
+          },
+          "region": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region",
+            "description": "地区偏好"
+          },
+          "city": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "City",
+            "description": "城市偏好"
+          },
+          "year_min": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Year Min",
+            "description": "最早接受年份"
+          },
+          "year_max": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Year Max",
+            "description": "最晚接受年份"
+          },
+          "mileage_max": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mileage Max",
+            "description": "可接受最大里程"
+          },
+          "priority": {
+            "type": "integer",
+            "maximum": 10.0,
+            "minimum": 1.0,
+            "title": "Priority",
+            "description": "需求优先级",
+            "default": 5
+          },
+          "preferences": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Preferences",
+            "description": "额外偏好"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes",
+            "description": "备注"
+          },
+          "notify_enabled": {
+            "type": "boolean",
+            "title": "Notify Enabled",
+            "description": "是否开启提醒",
+            "default": true
+          }
+        },
+        "type": "object",
+        "required": [
+          "user_id",
+          "car_type",
+          "budget_min",
+          "budget_max"
+        ],
+        "title": "DemandCreate"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "InquiryRequest": {
+        "properties": {
+          "buyer_id": {
+            "type": "integer",
+            "title": "Buyer Id",
+            "description": "买家用户ID"
+          },
+          "seller_id": {
+            "type": "integer",
+            "title": "Seller Id",
+            "description": "卖家用户ID"
+          },
+          "car_id": {
+            "type": "string",
+            "title": "Car Id",
+            "description": "车辆ID"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message",
+            "description": "询价内容"
+          }
+        },
+        "type": "object",
+        "required": [
+          "buyer_id",
+          "seller_id",
+          "car_id"
+        ],
+        "title": "InquiryRequest"
+      },
+      "LifecycleRecordCreate": {
+        "properties": {
+          "record_type": {
+            "type": "string",
+            "title": "Record Type",
+            "description": "maintenance/accident/price/ownership"
+          },
+          "data": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Data",
+            "description": "记录内容"
+          },
+          "remark": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Remark",
+            "description": "备注"
+          }
+        },
+        "type": "object",
+        "required": [
+          "record_type",
+          "data"
+        ],
+        "title": "LifecycleRecordCreate"
+      },
+      "NegotiateRequest": {
+        "properties": {
+          "buyer_id": {
+            "type": "integer",
+            "title": "Buyer Id",
+            "description": "买家用户ID"
+          },
+          "seller_id": {
+            "type": "integer",
+            "title": "Seller Id",
+            "description": "卖家用户ID"
+          },
+          "car_id": {
+            "type": "string",
+            "title": "Car Id",
+            "description": "车辆ID"
+          },
+          "proposed_price": {
+            "type": "number",
+            "title": "Proposed Price",
+            "description": "报价"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason",
+            "description": "说明"
+          }
+        },
+        "type": "object",
+        "required": [
+          "buyer_id",
+          "seller_id",
+          "car_id",
+          "proposed_price"
+        ],
+        "title": "NegotiateRequest"
+      },
+      "ReviewReportRequest": {
+        "properties": {
+          "report_id": {
+            "type": "integer",
+            "title": "Report Id",
+            "description": "举报ID"
+          },
+          "approved": {
+            "type": "boolean",
+            "title": "Approved",
+            "description": "是否通过"
+          },
+          "admin_id": {
+            "type": "string",
+            "title": "Admin Id",
+            "description": "管理员ID"
+          },
+          "remark": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Remark",
+            "description": "审核备注"
+          }
+        },
+        "type": "object",
+        "required": [
+          "report_id",
+          "approved",
+          "admin_id"
+        ],
+        "title": "ReviewReportRequest"
+      },
+      "SellerReportCreate": {
+        "properties": {
+          "reporter_id": {
+            "type": "integer",
+            "title": "Reporter Id",
+            "description": "举报者"
+          },
+          "seller_id": {
+            "type": "integer",
+            "title": "Seller Id",
+            "description": "被举报卖家"
+          },
+          "car_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Car Id",
+            "description": "关联车辆ID"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason",
+            "description": "举报原因"
+          },
+          "evidence": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evidence",
+            "description": "证据描述或文件 URL"
+          }
+        },
+        "type": "object",
+        "required": [
+          "reporter_id",
+          "seller_id",
+          "reason"
+        ],
+        "title": "SellerReportCreate"
+      },
+      "UserCreate": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name",
+            "description": "用户名称"
+          },
+          "email": {
+            "type": "string",
+            "title": "Email",
+            "description": "邮箱"
+          },
+          "phone": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Phone",
+            "description": "手机号"
+          },
+          "is_dealer": {
+            "type": "boolean",
+            "title": "Is Dealer",
+            "description": "是否车商",
+            "default": false
+          },
+          "buyer_persona": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Buyer Persona",
+            "description": "买家画像"
+          },
+          "seller_persona": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seller Persona",
+            "description": "卖家画像"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "email"
+        ],
+        "title": "UserCreate"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
       }
     }
   }
 }
-

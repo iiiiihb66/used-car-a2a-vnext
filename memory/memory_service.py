@@ -950,7 +950,16 @@ class MemoryService:
         budget_min: float,
         budget_max: float,
         region: str = None,
-        preferences: Dict = None
+        preferences: Dict = None,
+        brand_preference: str = None,
+        series_preference: str = None,
+        city: str = None,
+        year_min: int = None,
+        year_max: int = None,
+        mileage_max: float = None,
+        priority: int = 5,
+        notes: str = None,
+        notify_enabled: bool = True,
     ) -> Dict[str, Any]:
         """
         创建购车需求
@@ -971,18 +980,34 @@ class MemoryService:
             demand_id=demand_id,
             user_id=user_id,
             car_type=car_type,
+            brand_preference=brand_preference,
+            series_preference=series_preference,
             budget_min=budget_min,
             budget_max=budget_max,
             region=region,
+            city=city,
+            year_min=year_min,
+            year_max=year_max,
+            mileage_max=mileage_max,
+            priority=priority,
             preferences=preferences or {},
+            notes=notes,
             status="active"
         )
+        demand.notify_enabled = 1 if notify_enabled else 0
         
         self.db.add(demand)
         self.db.commit()
         self.db.refresh(demand)
         
         return demand.to_dict()
+
+    def get_demand(self, demand_id: str) -> Optional[Dict[str, Any]]:
+        """
+        通过 demand_id 获取单个需求
+        """
+        demand = self.db.query(DemandPool).filter(DemandPool.demand_id == demand_id).first()
+        return demand.to_dict() if demand else None
     
     def get_demands_by_user(self, user_id: int, status: str = None) -> List[Dict[str, Any]]:
         """
@@ -1001,6 +1026,77 @@ class MemoryService:
         
         demands = query.order_by(DemandPool.created_at.desc()).all()
         return [d.to_dict() for d in demands]
+
+    def find_demand_matches(self, demand_id: str, limit: int = 20) -> Dict[str, Any]:
+        """
+        查找某个需求当前可匹配的真实车源
+        """
+        demand = self.db.query(DemandPool).filter(DemandPool.demand_id == demand_id).first()
+        if not demand:
+            return {"success": False, "error": "需求不存在"}
+
+        query = self.db.query(CarMemory).filter(
+            CarMemory.is_listed == True,
+            CarMemory.current_status == "上架中",
+            CarMemory.price >= demand.budget_min,
+            CarMemory.price <= demand.budget_max,
+        )
+
+        if demand.brand_preference:
+            query = query.filter(CarMemory.brand == demand.brand_preference)
+        if demand.region:
+            query = query.filter(CarMemory.region == demand.region)
+        if demand.city:
+            query = query.filter(CarMemory.city == demand.city)
+        if demand.year_min:
+            query = query.filter(CarMemory.year >= demand.year_min)
+        if demand.year_max:
+            query = query.filter(CarMemory.year <= demand.year_max)
+        if demand.mileage_max:
+            query = query.filter(CarMemory.mileage <= demand.mileage_max)
+        if demand.series_preference:
+            query = query.filter(CarMemory.series.like(f"%{demand.series_preference}%"))
+
+        cars = query.order_by(CarMemory.listed_at.desc()).limit(limit).all()
+
+        matches = []
+        demand_keywords = [kw for kw in [demand.car_type, demand.series_preference, demand.brand_preference] if kw]
+        for car in cars:
+            score = 0.6
+            if demand.brand_preference and car.brand == demand.brand_preference:
+                score += 0.15
+            if demand.region and car.region == demand.region:
+                score += 0.1
+            if demand.city and car.city == demand.city:
+                score += 0.05
+            if demand.series_preference and demand.series_preference in (car.series or ""):
+                score += 0.05
+            if any(keyword in f"{car.brand} {car.series} {car.model}" for keyword in demand_keywords):
+                score += 0.05
+
+            matches.append({
+                "car_id": car.car_id,
+                "brand": car.brand,
+                "series": car.series,
+                "model": car.model,
+                "year": car.year,
+                "price": car.price,
+                "mileage": car.mileage,
+                "region": car.region,
+                "city": car.city,
+                "owner_id": car.owner_id,
+                "match_score": round(min(score, 1.0), 2),
+                "chain_verified": bool(car.chain_verified),
+                "listed_at": car.listed_at.isoformat() if car.listed_at else None,
+            })
+
+        return {
+            "success": True,
+            "demand": demand.to_dict(),
+            "total": len(matches),
+            "matches": matches,
+            "searched_at": datetime.utcnow().isoformat(),
+        }
     
     # ==================== 对话历史操作 ====================
     
