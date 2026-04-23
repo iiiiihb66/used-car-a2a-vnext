@@ -1,0 +1,120 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Used Car A2A Intent Hall API",
+    "version": "0.1.0",
+    "description": "Tool-style API for used-car profile transparency, intent matching, and agent negotiation."
+  },
+  "servers": [
+    {
+      "url": "https://your-service-domain.example.com",
+      "description": "Replace with your deployed backend domain"
+    }
+  ],
+  "paths": {
+    "/health": {
+      "get": {
+        "summary": "Health check",
+        "responses": {
+          "200": {
+            "description": "Healthy"
+          }
+        }
+      }
+    },
+    "/api/v1/users": {
+      "post": {
+        "summary": "Create user",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["name", "email"],
+                "properties": {
+                  "name": { "type": "string" },
+                  "email": { "type": "string" },
+                  "phone": { "type": "string" },
+                  "is_dealer": { "type": "boolean" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "User created" }
+        }
+      },
+      "get": {
+        "summary": "List users",
+        "responses": {
+          "200": { "description": "Users listed" }
+        }
+      }
+    },
+    "/api/v1/cars": {
+      "post": {
+        "summary": "Create vehicle profile",
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "query",
+            "required": true,
+            "schema": { "type": "integer" }
+          }
+        ],
+        "responses": {
+          "200": { "description": "Vehicle created" }
+        }
+      },
+      "get": {
+        "summary": "List vehicle profiles",
+        "responses": {
+          "200": { "description": "Vehicles listed" }
+        }
+      }
+    },
+    "/api/v1/cars/{car_id}/verify": {
+      "get": {
+        "summary": "Verify tamper-evident lifecycle chain",
+        "parameters": [
+          {
+            "name": "car_id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": { "description": "Verification result" }
+        }
+      }
+    },
+    "/api/v1/agent/inquiry": {
+      "post": {
+        "summary": "Agent sends inquiry",
+        "responses": {
+          "200": { "description": "Inquiry processed" }
+        }
+      }
+    },
+    "/api/v1/agent/negotiate": {
+      "post": {
+        "summary": "Agent sends negotiation proposal",
+        "responses": {
+          "200": { "description": "Negotiation processed" }
+        }
+      }
+    },
+    "/api/v1/reputation/leaderboard": {
+      "get": {
+        "summary": "Get reputation leaderboard",
+        "responses": {
+          "200": { "description": "Leaderboard returned" }
+        }
+      }
+    }
+  }
+}
+
