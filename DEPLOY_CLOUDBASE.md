@@ -58,6 +58,22 @@ tcb cloudrun deploy -e <ENV_ID> -s <SERVICE_NAME> --source .
 
 - `used-car-a2a-vnext`
 
+## GitHub Actions 自动部署
+
+仓库已提供手动触发的工作流:
+
+- `.github/workflows/deploy-cloudbase.yml`
+
+需要在 GitHub 仓库的 `Settings -> Secrets and variables -> Actions` 添加:
+
+- `TCB_SECRET_ID`
+- `TCB_SECRET_KEY`
+- `TCB_ENV_ID`
+- `TCB_SERVICE_NAME`
+
+配置完成后，在 GitHub `Actions -> Deploy CloudBase -> Run workflow` 手动部署。
+详细步骤见 `GITHUB_ACTIONS.md`。
+
 ## 部署后检查
 
 1. `/health` 返回 `healthy`
