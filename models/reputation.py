@@ -1,7 +1,7 @@
 """
 积分与声誉引擎
 负责奖励用户行为（录入档案、成交等）和惩罚违规行为
-包含积分变现功能
+包含积分权益功能
 """
 
 from typing import Dict, Any, Optional
@@ -23,10 +23,10 @@ class ReputationEngine:
     信誉分上限: 100
     信誉分下限: 0
     
-    积分变现规则：
-    - 100积分 = 10元
-    - 单次最高抵扣50%
-    - 最低100积分起用
+    积分权益规则：
+    - 可兑换工具型权益
+    - 可用于车源展示优先
+    - 不提供现金、贷款或金融权益
     """
     
     # 录入档案积分规则
@@ -45,16 +45,7 @@ class ReputationEngine:
     HIGH_VALUE_THRESHOLD = 200000  # 大额交易门槛
     HIGH_VALUE_BONUS = 3  # 大额交易额外奖励
     
-    # ==================== 积分变现配置 ====================
-    POINTS_TO_MONEY_RATE = 10  # 100积分 = 10元
-    
-    # 贷款利率优惠规则
-    LOAN_DISCOUNT_RULES = {
-        (95, 99): 0.5,   # 信誉分 95-99: 利率 -0.5%
-        (90, 94): 0.3,   # 信誉分 90-94: 利率 -0.3%
-        (100, 100): 0.8  # 信誉分 100: 利率 -0.8%
-    }
-    
+    # ==================== 积分权益配置 ====================
     # 置顶规则
     BOOST_COST_PER_DAY = 30  # 每天消耗 30 积分
     BOOST_MAX_DAYS = 30      # 最多置顶 30 天
@@ -446,17 +437,17 @@ class ReputationEngine:
         original_fee: float = None
     ) -> Dict[str, Any]:
         """
-        消耗积分抵扣
+        消耗积分兑换工具权益
         
         Args:
             user_id: 用户ID
             points: 消耗积分数
             purpose: 用途（inspection/boost/other）
             related_id: 关联ID
-            original_fee: 原费用（用于计算最大抵扣额）
+            original_fee: 兼容旧调用，当前不做金额换算
         
         Returns:
-            {"success": True/False, "points_used": N, "money_saved": X, "remaining_points": N}
+            {"success": True/False, "points_used": N, "remaining_points": N}
         """
         user = self._get_user(user_id)
         if not user:
@@ -470,27 +461,11 @@ class ReputationEngine:
                 "error": f"积分不足，当前余额: {current_balance}，需要: {points}"
             }
         
-        if points < 100:
-            return {"success": False, "error": "最低100积分起抵扣"}
-        
-        # 检查最大抵扣限制（单次最高抵扣50%）
-        if original_fee is not None:
-            max_deduction = original_fee * 0.5  # 最大抵扣50%
-            money_saved = points / self.POINTS_TO_MONEY_RATE
-            if money_saved > max_deduction:
-                # 自动调整积分数
-                max_points = int(max_deduction * self.POINTS_TO_MONEY_RATE)
-                return {
-                    "success": False,
-                    "error": f"单次最高抵扣50%，当前最多使用 {max_points} 积分抵 ¥{max_deduction}",
-                    "max_points_allowed": max_points
-                }
-        
         # 扣除积分
         user.behavior_points = current_balance - points
         
         # 记录流水
-        remark = f"积分抵扣{purpose}"
+        remark = f"积分兑换{purpose}"
         self.add_points_transaction(
             user_id=user_id,
             transaction_type="redeem",
@@ -504,74 +479,11 @@ class ReputationEngine:
         user.updated_at = datetime.utcnow()
         self.db.commit()
         
-        # 计算抵扣金额
-        money_saved = points / self.POINTS_TO_MONEY_RATE
-        
         return {
             "success": True,
             "points_used": points,
-            "money_saved": money_saved,
             "remaining_points": user.behavior_points,
             "purpose": purpose
-        }
-    
-    def get_loan_discount(self, user_id: int, loan_amount: float = 100000, loan_years: int = 3) -> Dict[str, Any]:
-        """
-        获取贷款利率优惠
-        
-        Args:
-            user_id: 用户ID
-            loan_amount: 贷款金额（默认10万）
-            loan_years: 贷款年限（默认3年）
-        
-        Returns:
-            {"eligible": True/False, "rate_discount": X, "trust_level": "金牌"}
-        """
-        user = self._get_user(user_id)
-        if not user:
-            return {"success": False, "error": "用户不存在"}
-        
-        reputation = user.reputation_score
-        trust_level = user.get_trust_level()
-        
-        # 查找匹配的优惠规则
-        rate_discount = 0
-        for (min_rep, max_rep), discount in sorted(self.LOAN_DISCOUNT_RULES.items(), reverse=True):
-            if min_rep <= reputation <= max_rep:
-                rate_discount = discount
-                break
-        
-        eligible = rate_discount > 0
-        
-        # 计算节省利息
-        standard_rate = 5.5  # 标准利率 5.5%
-        discounted_rate = standard_rate - rate_discount
-        
-        # 简化的等额本息计算
-        monthly_rate = discounted_rate / 100 / 12
-        months = loan_years * 12
-        if monthly_rate > 0:
-            discounted_monthly = loan_amount * monthly_rate * (1 + monthly_rate)**months / ((1 + monthly_rate)**months - 1)
-            standard_monthly = loan_amount * (standard_rate / 100 / 12) * (1 + (standard_rate / 100 / 12))**months / ((1 + (standard_rate / 100 / 12))**months - 1)
-            total_saved = (standard_monthly - discounted_monthly) * months
-        else:
-            total_saved = 0
-        
-        return {
-            "success": True,
-            "user_id": user_id,
-            "reputation_score": reputation,
-            "trust_level": trust_level,
-            "eligible": eligible,
-            "rate_discount": rate_discount,
-            "example": {
-                "loan_amount": loan_amount,
-                "loan_years": loan_years,
-                "standard_rate": f"{standard_rate}%",
-                "discounted_rate": f"{discounted_rate:.1f}%",
-                "monthly_payment_saved": round(total_saved / months, 2) if months > 0 else 0,
-                "total_saved": round(total_saved, 2)
-            }
         }
     
     def boost_listing(
@@ -666,10 +578,8 @@ class ReputationEngine:
             PointTransaction.created_at.desc()
         ).limit(limit).all()
         
-        # 计算积分价值
+        # 对外只暴露工具型权益，不做现金或金融价值换算。
         points_value = {
-            "can_redeem_money": round(user.behavior_points / self.POINTS_TO_MONEY_RATE, 2),
-            "loan_discount_available": self.get_loan_discount(user_id).get("eligible", False),
             "boost_available": user.behavior_points >= self.BOOST_COST_PER_DAY,
             "boost_cost_per_day": self.BOOST_COST_PER_DAY
         }

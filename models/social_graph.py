@@ -30,7 +30,7 @@ class SocialGraph(Base):
     # 维度2: Agent 技能标签
     # 记录每个 Agent 擅长的领域
     agent_skills = Column(JSON, default=list, comment="Agent技能标签")
-    # 结构: ["擅长谈日系车", "擅长贷款方案", "擅长验车", "价格谈判高手"]
+    # 结构: ["擅长谈日系车", "擅长车况核验", "擅长验车", "价格谈判高手"]
 
     # 维度3: 车辆社交圈
     # 同款车主的群体偏好

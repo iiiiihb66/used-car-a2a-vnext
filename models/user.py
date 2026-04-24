@@ -61,11 +61,12 @@ class User(Base):
     
     # 档案记录数
     record_count = Column(Integer, default=0, nullable=False, comment="档案记录数")
-    
-    # 贷款召回相关
-    loan_end_date = Column(DateTime, nullable=True, comment="贷款结束日期")
-    last_recall_at = Column(DateTime, nullable=True, comment="上次召回时间")
-    recall_count = Column(Integer, default=0, nullable=False, comment="召回次数")
+
+    # 历史兼容字段：旧 SQLite/CloudBase 数据库里已存在这些列。
+    # 生产 API 不返回、不使用，避免旧表 NOT NULL 约束导致插入失败。
+    legacy_loan_end_date = Column("loan_end_date", DateTime, nullable=True, comment="历史字段，已停用")
+    legacy_last_recall_at = Column("last_recall_at", DateTime, nullable=True, comment="历史字段，已停用")
+    legacy_recall_count = Column("recall_count", Integer, default=0, nullable=False, comment="历史字段，已停用")
     
     # 时间戳
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
@@ -108,9 +109,6 @@ class User(Base):
             "has_first_record_bonus": self.has_first_record_bonus,
             "has_listing_boost": self.has_listing_boost,
             "record_count": self.record_count,
-            "loan_end_date": self.loan_end_date.isoformat() if self.loan_end_date else None,
-            "last_recall_at": self.last_recall_at.isoformat() if self.last_recall_at else None,
-            "recall_count": self.recall_count,
         }
     
     def get_trust_level(self) -> str:

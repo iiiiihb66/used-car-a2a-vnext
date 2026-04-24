@@ -496,75 +496,6 @@ def create_transfer_ownership_tool() -> MCPTool:
     )
 
 
-def create_loan_transfer_tool() -> MCPTool:
-    """创建贷款转移工具"""
-    async def handler(
-        car_id: str,
-        remaining_loan: float,
-        buyer_id: int,
-        seller_id: int,
-        _context: Dict = None,
-        **kwargs
-    ) -> Dict[str, Any]:
-        """
-        贷款转移
-        处理车辆贷款转移或提前还款
-        
-        Returns:
-            包含 mock 标记的贷款转移结果
-        """
-        transfer_id = f"LN-{uuid.uuid4().hex[:12].upper()}"
-        
-        return {
-            "mock": True,  # TODO: 接入真实银行贷款系统
-            "transfer_id": transfer_id,
-            "car_id": car_id,
-            "remaining_loan": remaining_loan,
-            "buyer_id": buyer_id,
-            "seller_id": seller_id,
-            "status": "pending_review",
-            "created_at": datetime.utcnow().isoformat(),
-            "options": [
-                {
-                    "type": "full_transfer",
-                    "name": "贷款全额转移",
-                    "description": "将卖方剩余贷款转移给买方",
-                    "eligibility": "需要买方通过贷款资质审核",
-                    "processing_time": "3-5个工作日"
-                },
-                {
-                    "type": "early_repayment",
-                    "name": "提前还款",
-                    "description": "买方一次性还清剩余贷款",
-                    "eligibility": "无要求",
-                    "processing_time": "1-2个工作日"
-                },
-                {
-                    "type": "partial_transfer",
-                    "name": "部分转移",
-                    "description": "转移部分贷款，差额现金补齐",
-                    "eligibility": "需要买方通过部分贷款资质审核",
-                    "processing_time": "5-7个工作日"
-                }
-            ],
-            "estimated_interest_savings": round(remaining_loan * 0.05, 2),
-            "tips": "建议选择全额转移，可节省利息支出"
-        }
-    
-    return MCPTool(
-        name="loan_transfer",
-        description="处理车辆贷款转移方案",
-        parameters={
-            "car_id": {"type": "string", "required": True, "description": "车辆ID"},
-            "remaining_loan": {"type": "number", "required": True, "description": "剩余贷款金额"},
-            "buyer_id": {"type": "integer", "required": True, "description": "买家ID"},
-            "seller_id": {"type": "integer", "required": True, "description": "卖家ID"}
-        },
-        handler=handler,
-        category="transaction"
-    )
-
-
 def create_verify_chain_tool() -> MCPTool:
     """创建链式记录验证工具"""
     async def handler(
@@ -635,7 +566,6 @@ def init_tool_registry():
     if app_mode == "full":
         registry.register(create_escrow_create_tool())
         registry.register(create_transfer_ownership_tool())
-        registry.register(create_loan_transfer_tool())
     
     print(f"✅ MCP 工具注册完成，共 {len(registry._tools)} 个工具")
 
@@ -649,7 +579,6 @@ __all__ = [
     "create_verify_identity_tool",
     "create_schedule_inspection_tool",
     "create_transfer_ownership_tool",
-    "create_loan_transfer_tool",
     "create_verify_chain_tool",
     "init_tool_registry"
 ]

@@ -16,7 +16,6 @@ def __getattr__(name):
         "verify_identity",
         "schedule_inspection",
         "transfer_ownership",
-        "loan_transfer",
         "init_tool_registry"
     ]:
         from mcp import tools
@@ -34,6 +33,5 @@ __all__ = [
     "verify_identity",
     "schedule_inspection",
     "transfer_ownership",
-    "loan_transfer",
     "init_tool_registry"
 ]
