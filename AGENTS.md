@@ -45,6 +45,11 @@ If such code exists historically, keep it disabled or out of the production entr
 - Prefer small focused API surfaces over large all-in-one endpoints
 - Preserve Chinese user-facing copy unless there is a reason to change it
 - Favor boring deployment over clever architecture
+- Treat Agent work as a supervised network: buyer Agent, seller Agent, and
+  platform scheduler Agent should exchange state through the backend rather than
+  relying on chat context alone
+- Preserve explainability: matching, negotiation, and moderation decisions
+  should leave reviewable traces for users and administrators
 
 ## Sync Rule
 
@@ -77,6 +82,9 @@ This rule applies to:
 2. Replace local SQLite with CloudBase SQL in production
 3. Connect Mini Program frontend to `/api/v1/*`
 4. Add lightweight API regression tests for the production endpoints
+5. Turn manual Qclaw / WorkBuddy copy-paste testing into a platform scheduler loop
+6. Add Agent memory and observation records for demand failures, seller response
+   quality, and negotiation outcomes
 
 ## Future Architecture Guardrail
 

@@ -42,6 +42,10 @@ uvicorn app:app --reload
 
 见 [DEPLOY_CLOUDBASE.md](/Users/fuhongbo/Documents/Antigravity/项目对比/used-car-a2a-vnext/DEPLOY_CLOUDBASE.md)
 
+## 产品进化路线
+
+见 [PRODUCT_EVOLUTION.md](/Users/fuhongbo/Documents/Antigravity/项目对比/used-car-a2a-vnext/PRODUCT_EVOLUTION.md)
+
 ## Vercel 首页部署
 
 这个仓库已经包含静态首页源码和 `vercel.json`。
