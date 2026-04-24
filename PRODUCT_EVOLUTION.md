@@ -231,6 +231,9 @@ Agent 不能：
 - WorkBuddy 扮演车商 Agent
 - 人工复制消息做调度
 - CloudBase 保存状态
+- `record-and-reward` 接口把录档、链式存证和积分奖励串成一个动作
+- Agent 事件接口记录 Qclaw / WorkBuddy 的关键观察和执行结果
+- 管理者漏斗接口显示需求、车源、协商和未匹配需求
 
 目标：
 

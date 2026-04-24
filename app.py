@@ -28,9 +28,16 @@ from a2a.bus import get_a2a_bus
 from memory.memory_service import get_memory_service
 from mcp.tools import init_tool_registry
 from models.database import SessionLocal, get_db, init_database
+from models.agent_event import AgentEvent
+from models.car import CarMemory
+from models.car_lifecycle_record import CarLifecycleRecord
+from models.conversation import Conversation
+from models.demand import DemandPool
 from models.penalty import PenaltyEngine
+from models.point_transaction import PointTransaction
 from models.reputation import ReputationEngine
 from models.seller_report import SellerReport
+from models.user import User
 
 
 APP_TITLE = "二手车 A2A 档案协商工具"
@@ -118,6 +125,10 @@ class LifecycleRecordCreate(BaseModel):
     remark: Optional[str] = Field(None, description="备注")
 
 
+class RecordAndRewardRequest(LifecycleRecordCreate):
+    user_id: int = Field(..., description="录入者用户ID")
+
+
 class InquiryRequest(BaseModel):
     buyer_id: int = Field(..., description="买家用户ID")
     seller_id: int = Field(..., description="卖家用户ID")
@@ -171,6 +182,22 @@ class DemandCreate(BaseModel):
     preferences: Optional[Dict[str, Any]] = Field(None, description="额外偏好")
     notes: Optional[str] = Field(None, description="备注")
     notify_enabled: bool = Field(True, description="是否开启提醒")
+
+
+class AgentEventCreate(BaseModel):
+    actor_agent: str = Field(..., description="Agent 名称，如 Qclaw/WorkBuddy/platform-scheduler")
+    actor_role: str = Field(..., description="buyer/seller/platform/admin")
+    event_type: str = Field(..., description="事件类型，如 match_empty/car_published/inquiry_sent")
+    status: str = Field("observed", description="observed/succeeded/failed/pending")
+    user_id: Optional[int] = Field(None, description="关联用户")
+    related_user_id: Optional[int] = Field(None, description="关联对方用户")
+    related_car_id: Optional[str] = Field(None, description="关联车辆")
+    related_demand_id: Optional[str] = Field(None, description="关联需求")
+    related_conversation_id: Optional[str] = Field(None, description="关联会话")
+    input_snapshot: Optional[Dict[str, Any]] = Field(None, description="触发条件")
+    output_snapshot: Optional[Dict[str, Any]] = Field(None, description="执行结果")
+    observation: Optional[str] = Field(None, description="自然语言观察")
+    score: Optional[float] = Field(None, description="可选评分")
 
 
 @app.get("/")
@@ -466,6 +493,56 @@ async def add_car_record(
     return {"success": True, "data": result}
 
 
+@app.post("/api/v1/cars/{car_id}/record-and-reward")
+async def record_and_reward(
+    car_id: str,
+    request: RecordAndRewardRequest,
+    db=Depends(get_db),
+) -> Dict[str, Any]:
+    """
+    一步完成：录入车档 -> 链式存证 -> 发放积分/信誉。
+
+    这是档案库增长的核心激励接口，不涉及支付、托管或金融权益。
+    """
+    memory = get_memory_service(db)
+    car = await memory.get_car_memory(car_id)
+    if not car:
+        raise HTTPException(status_code=404, detail="车辆不存在")
+
+    user = memory.get_user(request.user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="录入用户不存在")
+
+    should_grant_first_record_bonus = memory.check_first_record_bonus(request.user_id)
+
+    result = await memory.add_lifecycle_record(
+        car_id=car_id,
+        record_type=request.record_type,
+        data=request.data,
+        signed_by=str(request.user_id),
+        remark=request.remark,
+    )
+
+    first_record_bonus = None
+    if should_grant_first_record_bonus:
+        first_record_bonus = memory.grant_first_record_bonus(request.user_id)
+
+    complete_profile_bonus = None
+    if memory.check_complete_profile_bonus(request.user_id):
+        complete_profile_bonus = memory.grant_complete_profile_bonus(request.user_id)
+
+    return {
+        "success": True,
+        "message": "车档已链式存证，积分与信誉已更新",
+        "data": {
+            "record": result.get("record"),
+            "reward": result.get("reward"),
+            "first_record_bonus": first_record_bonus,
+            "complete_profile_bonus": complete_profile_bonus,
+        },
+    }
+
+
 @app.get("/api/v1/cars/{car_id}/records")
 async def get_car_records(
     car_id: str,
@@ -482,6 +559,62 @@ async def verify_car_chain(car_id: str, db=Depends(get_db)) -> Dict[str, Any]:
     memory = get_memory_service(db)
     result = await memory.verify_car_chain(car_id)
     return {"success": True, "data": result}
+
+
+@app.get("/api/v1/points/{user_id}")
+async def get_points_balance(
+    user_id: int,
+    limit: int = Query(20, ge=1, le=100),
+    db=Depends(get_db),
+) -> Dict[str, Any]:
+    engine = ReputationEngine(db)
+    result = engine.get_points_balance(user_id=user_id, limit=limit)
+    if not result.get("success"):
+        raise HTTPException(status_code=404, detail=result.get("error", "用户不存在"))
+
+    # 对外只展示工具型权益，避免暴露任何金融/贷款表述。
+    result.pop("points_value", None)
+    result["available_tool_rights"] = {
+        "listing_boost_available": result.get("behavior_points", 0) >= engine.BOOST_COST_PER_DAY,
+        "listing_boost_cost_per_day": engine.BOOST_COST_PER_DAY,
+        "free_evaluation_hint": "如账号有免费估价权益，可用于生成车况整理建议",
+    }
+    return result
+
+
+@app.post("/api/v1/cars/{car_id}/boost")
+async def boost_car_listing(
+    car_id: str,
+    user_id: int = Query(..., description="车主用户ID"),
+    days: int = Query(3, ge=1, le=30, description="展示优先天数"),
+    db=Depends(get_db),
+) -> Dict[str, Any]:
+    car = db.query(CarMemory).filter(CarMemory.car_id == car_id).first()
+    if not car:
+        raise HTTPException(status_code=404, detail="车辆不存在")
+    if car.owner_id != user_id:
+        raise HTTPException(status_code=403, detail="只能为自己的车辆开启展示优先")
+
+    engine = ReputationEngine(db)
+    result = engine.boost_listing(user_id=user_id, car_id=car_id, days=days)
+    if not result.get("success"):
+        raise HTTPException(status_code=400, detail=result.get("error", "展示优先失败"))
+
+    car.is_boosted = True
+    car.boost_expiry = datetime.strptime(result["boost_end"], "%Y-%m-%d %H:%M:%S")
+    car.updated_at = datetime.utcnow()
+    db.commit()
+
+    return {
+        "success": True,
+        "message": "车辆已开启展示优先",
+        "data": {
+            "car_id": car_id,
+            "points_used": result["points_used"],
+            "remaining_points": result["remaining_points"],
+            "boost_expiry": car.boost_expiry.isoformat(),
+        },
+    }
 
 
 @app.post("/api/v1/agent/inquiry")
@@ -548,6 +681,117 @@ async def get_conversations(
         limit=limit,
     )
     return {"success": True, "total": len(history), "data": history}
+
+
+@app.post("/api/v1/agent/events")
+async def record_agent_event(
+    request: AgentEventCreate,
+    db=Depends(get_db),
+) -> Dict[str, Any]:
+    event = AgentEvent(
+        actor_agent=request.actor_agent,
+        actor_role=request.actor_role,
+        event_type=request.event_type,
+        status=request.status,
+        user_id=request.user_id,
+        related_user_id=request.related_user_id,
+        related_car_id=request.related_car_id,
+        related_demand_id=request.related_demand_id,
+        related_conversation_id=request.related_conversation_id,
+        input_snapshot=request.input_snapshot or {},
+        output_snapshot=request.output_snapshot or {},
+        observation=request.observation,
+        score=request.score,
+    )
+    db.add(event)
+    db.commit()
+    db.refresh(event)
+    return {"success": True, "message": "Agent 事件已记录", "data": event.to_dict()}
+
+
+@app.get("/api/v1/admin/agent-events")
+async def list_agent_events(
+    actor_role: Optional[str] = Query(None),
+    event_type: Optional[str] = Query(None),
+    status: Optional[str] = Query(None),
+    limit: int = Query(50, ge=1, le=200),
+    db=Depends(get_db),
+    _: None = Depends(require_admin_token),
+) -> Dict[str, Any]:
+    query = db.query(AgentEvent)
+    if actor_role:
+        query = query.filter(AgentEvent.actor_role == actor_role)
+    if event_type:
+        query = query.filter(AgentEvent.event_type == event_type)
+    if status:
+        query = query.filter(AgentEvent.status == status)
+
+    events = query.order_by(AgentEvent.created_at.desc()).limit(limit).all()
+    return {"success": True, "total": len(events), "data": [event.to_dict() for event in events]}
+
+
+@app.get("/api/v1/admin/analytics/funnel")
+async def get_admin_funnel(
+    limit_unmatched: int = Query(20, ge=1, le=100),
+    db=Depends(get_db),
+    _: None = Depends(require_admin_token),
+) -> Dict[str, Any]:
+    memory = get_memory_service(db)
+
+    total_users = db.query(User).count()
+    dealer_users = db.query(User).filter(User.is_dealer == True).count()
+    total_cars = db.query(CarMemory).count()
+    listed_cars = db.query(CarMemory).filter(CarMemory.is_listed == True).count()
+    total_demands = db.query(DemandPool).count()
+    active_demands = db.query(DemandPool).filter(DemandPool.status == "active").count()
+    lifecycle_records = db.query(CarLifecycleRecord).count()
+    conversations = db.query(Conversation).count()
+    inquiries = db.query(Conversation).filter(Conversation.intent == "price_inquiry").count()
+    negotiations = db.query(Conversation).filter(Conversation.intent == "price_negotiate").count()
+    deal_intents = db.query(Conversation).filter(Conversation.intent == "deal_intent").count()
+    agent_events = db.query(AgentEvent).count()
+
+    unmatched_demands = []
+    active_demand_rows = (
+        db.query(DemandPool)
+        .filter(DemandPool.status == "active")
+        .order_by(DemandPool.created_at.desc())
+        .limit(limit_unmatched)
+        .all()
+    )
+    for demand in active_demand_rows:
+        result = memory.find_demand_matches(demand_id=demand.demand_id, limit=1)
+        if result.get("success") and result.get("total", 0) == 0:
+            unmatched_demands.append(demand.to_dict())
+
+    return {
+        "success": True,
+        "data": {
+            "funnel": {
+                "users": total_users,
+                "dealers": dealer_users,
+                "cars": total_cars,
+                "listed_cars": listed_cars,
+                "demands": total_demands,
+                "active_demands": active_demands,
+                "lifecycle_records": lifecycle_records,
+                "conversations": conversations,
+                "inquiries": inquiries,
+                "negotiations": negotiations,
+                "deal_intents": deal_intents,
+                "agent_events": agent_events,
+            },
+            "manager_attention": {
+                "unmatched_active_demands": unmatched_demands,
+                "unmatched_count_in_sample": len(unmatched_demands),
+                "next_actions": [
+                    "让车商 Agent 补充符合预算和城市的车源",
+                    "让买家 Agent 解释是否接受放宽预算或品牌",
+                    "记录匹配失败原因，沉淀为后续调度规则",
+                ],
+            },
+        },
+    }
 
 
 @app.post("/api/v1/reports/seller")

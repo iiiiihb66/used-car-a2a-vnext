@@ -35,8 +35,10 @@
 - `GET /api/v1/cars/{car_id}`
 - `GET /api/v1/users/{user_id}/cars`
 - `POST /api/v1/cars/{car_id}/records`
+- `POST /api/v1/cars/{car_id}/record-and-reward`
 - `GET /api/v1/cars/{car_id}/records`
 - `GET /api/v1/cars/{car_id}/verify`
+- `POST /api/v1/cars/{car_id}/boost`
 
 ### 需求大厅与撮合
 
@@ -50,7 +52,14 @@
 - `POST /api/v1/agent/inquiry`
 - `POST /api/v1/agent/negotiate`
 - `POST /api/v1/agent/deal-intent`
+- `POST /api/v1/agent/events`
 - `GET /api/v1/conversations/{user_id}`
+
+### 积分与管理者观察
+
+- `GET /api/v1/points/{user_id}`
+- `GET /api/v1/admin/agent-events`
+- `GET /api/v1/admin/analytics/funnel`
 
 ### 举报与治理
 
@@ -85,6 +94,7 @@
 - `schedule_inspection` 仍是 mock
 - AI 大模型能力依赖 CloudBase AI 配置完成后才是正式可用
 - 生产数据库尚未切到 CloudBase SQL / MySQL
+- MCP 标准服务器尚未封装，当前先用 HTTP API 验证 Agent 闭环
 
 ## 上线前必须补齐的配置
 

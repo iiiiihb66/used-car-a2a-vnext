@@ -306,7 +306,10 @@ class MemoryService:
         if region:
             query = query.filter(CarMemory.region == region)
         
-        cars = query.order_by(CarMemory.listed_at.desc()).limit(limit).all()
+        cars = query.order_by(
+            CarMemory.is_boosted.desc(),
+            CarMemory.listed_at.desc(),
+        ).limit(limit).all()
         return [c.to_dict() for c in cars]
     
     async def update_car_status(self, car_id: str, status: str) -> Dict[str, Any]:

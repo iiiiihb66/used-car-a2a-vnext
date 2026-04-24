@@ -850,6 +850,58 @@
         }
       }
     },
+    "/api/v1/cars/{car_id}/record-and-reward": {
+      "post": {
+        "summary": "Record And Reward",
+        "description": "一步完成：录入车档 -> 链式存证 -> 发放积分/信誉。\n\n这是档案库增长的核心激励接口，不涉及支付、托管或金融权益。",
+        "operationId": "record_and_reward_api_v1_cars__car_id__record_and_reward_post",
+        "parameters": [
+          {
+            "name": "car_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Car Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecordAndRewardRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Record And Reward Api V1 Cars  Car Id  Record And Reward Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/cars/{car_id}/verify": {
       "get": {
         "summary": "Verify Car Chain",
@@ -874,6 +926,125 @@
                   "type": "object",
                   "additionalProperties": true,
                   "title": "Response Verify Car Chain Api V1 Cars  Car Id  Verify Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/points/{user_id}": {
+      "get": {
+        "summary": "Get Points Balance",
+        "operationId": "get_points_balance_api_v1_points__user_id__get",
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "User Id"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 20,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Get Points Balance Api V1 Points  User Id  Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/cars/{car_id}/boost": {
+      "post": {
+        "summary": "Boost Car Listing",
+        "operationId": "boost_car_listing_api_v1_cars__car_id__boost_post",
+        "parameters": [
+          {
+            "name": "car_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Car Id"
+            }
+          },
+          {
+            "name": "user_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "description": "车主用户ID",
+              "title": "User Id"
+            },
+            "description": "车主用户ID"
+          },
+          {
+            "name": "days",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 30,
+              "minimum": 1,
+              "description": "展示优先天数",
+              "default": 3,
+              "title": "Days"
+            },
+            "description": "展示优先天数"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Boost Car Listing Api V1 Cars  Car Id  Boost Post"
                 }
               }
             }
@@ -1080,6 +1251,214 @@
         }
       }
     },
+    "/api/v1/agent/events": {
+      "post": {
+        "summary": "Record Agent Event",
+        "operationId": "record_agent_event_api_v1_agent_events_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AgentEventCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Record Agent Event Api V1 Agent Events Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/agent-events": {
+      "get": {
+        "summary": "List Agent Events",
+        "operationId": "list_agent_events_api_v1_admin_agent_events_get",
+        "parameters": [
+          {
+            "name": "actor_role",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Actor Role"
+            }
+          },
+          {
+            "name": "event_type",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Event Type"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "X-Admin-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Admin-Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response List Agent Events Api V1 Admin Agent Events Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/analytics/funnel": {
+      "get": {
+        "summary": "Get Admin Funnel",
+        "operationId": "get_admin_funnel_api_v1_admin_analytics_funnel_get",
+        "parameters": [
+          {
+            "name": "limit_unmatched",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 20,
+              "title": "Limit Unmatched"
+            }
+          },
+          {
+            "name": "X-Admin-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Admin-Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Get Admin Funnel Api V1 Admin Analytics Funnel Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/reports/seller": {
       "post": {
         "summary": "Report Seller",
@@ -1257,6 +1636,148 @@
   },
   "components": {
     "schemas": {
+      "AgentEventCreate": {
+        "properties": {
+          "actor_agent": {
+            "type": "string",
+            "title": "Actor Agent",
+            "description": "Agent 名称，如 Qclaw/WorkBuddy/platform-scheduler"
+          },
+          "actor_role": {
+            "type": "string",
+            "title": "Actor Role",
+            "description": "buyer/seller/platform/admin"
+          },
+          "event_type": {
+            "type": "string",
+            "title": "Event Type",
+            "description": "事件类型，如 match_empty/car_published/inquiry_sent"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "description": "observed/succeeded/failed/pending",
+            "default": "observed"
+          },
+          "user_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Id",
+            "description": "关联用户"
+          },
+          "related_user_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Related User Id",
+            "description": "关联对方用户"
+          },
+          "related_car_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Related Car Id",
+            "description": "关联车辆"
+          },
+          "related_demand_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Related Demand Id",
+            "description": "关联需求"
+          },
+          "related_conversation_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Related Conversation Id",
+            "description": "关联会话"
+          },
+          "input_snapshot": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Input Snapshot",
+            "description": "触发条件"
+          },
+          "output_snapshot": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Output Snapshot",
+            "description": "执行结果"
+          },
+          "observation": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Observation",
+            "description": "自然语言观察"
+          },
+          "score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Score",
+            "description": "可选评分"
+          }
+        },
+        "type": "object",
+        "required": [
+          "actor_agent",
+          "actor_role",
+          "event_type"
+        ],
+        "title": "AgentEventCreate"
+      },
       "CarCreate": {
         "properties": {
           "brand": {
@@ -1707,6 +2228,45 @@
           "proposed_price"
         ],
         "title": "NegotiateRequest"
+      },
+      "RecordAndRewardRequest": {
+        "properties": {
+          "record_type": {
+            "type": "string",
+            "title": "Record Type",
+            "description": "maintenance/accident/price/ownership"
+          },
+          "data": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Data",
+            "description": "记录内容"
+          },
+          "remark": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Remark",
+            "description": "备注"
+          },
+          "user_id": {
+            "type": "integer",
+            "title": "User Id",
+            "description": "录入者用户ID"
+          }
+        },
+        "type": "object",
+        "required": [
+          "record_type",
+          "data",
+          "user_id"
+        ],
+        "title": "RecordAndRewardRequest"
       },
       "ReviewReportRequest": {
         "properties": {

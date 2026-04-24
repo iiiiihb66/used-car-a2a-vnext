@@ -86,6 +86,7 @@ def init_database():
     from models.negotiation import NegotiationHistory
     from models.point_transaction import PointTransaction
     from models.seller_report import SellerReport
+    from models.agent_event import AgentEvent
     
     Base.metadata.create_all(bind=engine)
     print("✅ 数据库表结构创建完成")
@@ -105,6 +106,7 @@ def reset_database():
     from models.negotiation import NegotiationHistory
     from models.point_transaction import PointTransaction
     from models.seller_report import SellerReport
+    from models.agent_event import AgentEvent
     
     Base.metadata.drop_all(bind=engine)
     Base.metadata.create_all(bind=engine)
