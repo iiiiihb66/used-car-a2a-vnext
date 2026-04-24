@@ -5,6 +5,11 @@
     "description": "\n工具型二手车协作后端，聚焦车况档案、Agent 协商和信誉治理。\n\n不提供支付、托管、贷款或金融服务，仅作为信息整理与协商辅助工具。\n",
     "version": "0.1.0"
   },
+  "servers": [
+    {
+      "url": "https://used-car-a2a-vnext-249890-8-1407936127.sh.run.tcloudbase.com"
+    }
+  ],
   "paths": {
     "/": {
       "get": {
@@ -19,6 +24,44 @@
                   "additionalProperties": true,
                   "type": "object",
                   "title": "Response Root  Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/skill.md": {
+      "get": {
+        "summary": "Skill Markdown",
+        "operationId": "skill_markdown_skill_md_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/.well-known/agent.json": {
+      "get": {
+        "summary": "Agent Manifest",
+        "operationId": "agent_manifest__well_known_agent_json_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Agent Manifest  Well Known Agent Json Get"
                 }
               }
             }

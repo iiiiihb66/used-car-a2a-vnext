@@ -3,6 +3,14 @@
     {
       "source": "/",
       "destination": "/site/index.html"
+    },
+    {
+      "source": "/skill.md",
+      "destination": "/site/skill.md"
+    },
+    {
+      "source": "/.well-known/agent.json",
+      "destination": "/site/agent.json"
     }
   ],
   "headers": [

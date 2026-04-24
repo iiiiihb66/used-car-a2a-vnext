@@ -19,6 +19,7 @@ from uuid import uuid4
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel, Field
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -34,6 +35,10 @@ from models.seller_report import SellerReport
 
 APP_TITLE = "二手车 A2A 档案协商工具"
 APP_VERSION = "0.1.0"
+PUBLIC_BASE_URL = os.getenv(
+    "PUBLIC_BASE_URL",
+    "https://used-car-a2a-vnext-249890-8-1407936127.sh.run.tcloudbase.com",
+)
 APP_DESCRIPTION = """
 工具型二手车协作后端，聚焦车况档案、Agent 协商和信誉治理。
 
@@ -52,6 +57,7 @@ app = FastAPI(
     title=APP_TITLE,
     description=APP_DESCRIPTION,
     version=APP_VERSION,
+    servers=[{"url": PUBLIC_BASE_URL}],
 )
 
 app.add_middleware(
@@ -174,7 +180,75 @@ async def root() -> Dict[str, Any]:
         "version": APP_VERSION,
         "mode": "tool",
         "docs": "/docs",
+        "base_url": PUBLIC_BASE_URL,
+        "openapi": f"{PUBLIC_BASE_URL}/openapi.json",
+        "skill": f"{PUBLIC_BASE_URL}/skill.md",
         "message": "服务在线。当前版本仅提供档案协商与信誉治理能力。",
+    }
+
+
+@app.get("/skill.md", response_class=PlainTextResponse)
+async def skill_markdown() -> str:
+    return f"""# 二手车 Agent 意向大厅 Skill
+
+这是一个面向 Qclaw / OpenClaw / 通用 Agent 的二手车意向撮合工具。
+
+## 服务入口
+
+- Base URL: `{PUBLIC_BASE_URL}`
+- OpenAPI: `{PUBLIC_BASE_URL}/openapi.json`
+- 健康检查: `{PUBLIC_BASE_URL}/health`
+
+## 业务定位
+
+- 工具型二手车协作后端
+- 帮用户发布买车需求、录入车辆档案、查询匹配结果
+- 帮 Agent 执行询价、议价、达成见面/沟通意向
+- 不提供支付、托管、贷款、金融推荐
+
+## Agent 使用方式
+
+1. 读取 `{PUBLIC_BASE_URL}/openapi.json`
+2. 使用 `{PUBLIC_BASE_URL}` 作为 API base URL
+3. 先调用 `POST /api/v1/users` 创建买家或车商用户
+4. 车商调用 `POST /api/v1/cars?user_id={{seller_id}}` 发布车源
+5. 买家调用 `POST /api/v1/demands` 发布买车需求
+6. 调用 `GET /api/v1/demands/{{demand_id}}/matches` 查看匹配车源
+7. 需要协商时调用 `/api/v1/agent/inquiry`、`/api/v1/agent/negotiate`、`/api/v1/agent/deal-intent`
+
+## 推荐提示词
+
+请安装并使用这个二手车 Agent 意向大厅 Skill：
+
+`{PUBLIC_BASE_URL}/skill.md`
+
+安装后，先读取 OpenAPI，并帮我完成一次测试流程：
+
+- 创建一个买家用户
+- 创建一个车商用户
+- 发布一辆测试车源
+- 发布一个买车需求
+- 查询需求匹配结果
+
+如果接口返回正常，再根据我的真实买车需求继续使用。
+"""
+
+
+@app.get("/.well-known/agent.json")
+async def agent_manifest() -> Dict[str, Any]:
+    return {
+        "name": APP_TITLE,
+        "version": APP_VERSION,
+        "description": "工具型二手车 A2A 意向撮合、车辆档案与 Agent 协商服务。",
+        "base_url": PUBLIC_BASE_URL,
+        "openapi_url": f"{PUBLIC_BASE_URL}/openapi.json",
+        "skill_url": f"{PUBLIC_BASE_URL}/skill.md",
+        "constraints": [
+            "不提供支付",
+            "不提供托管",
+            "不提供贷款",
+            "不提供金融推荐",
+        ],
     }
 
 

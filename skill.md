@@ -28,16 +28,32 @@
 
 ## 安装方式
 
-### 给 Agent
+### 给 Qclaw / OpenClaw
 
-1. 阅读本仓库 `README.md`
-2. 读取 `openapi.json`
-3. 将服务端地址替换为你的部署域名
-4. 让 Agent 通过 HTTP API 调用
+把下面这段发给 Agent：
+
+```text
+请安装并使用这个二手车 Agent 意向大厅 Skill：
+
+https://used-car-a2a-vnext-249890-8-1407936127.sh.run.tcloudbase.com/skill.md
+
+安装后读取 OpenAPI：
+
+https://used-car-a2a-vnext-249890-8-1407936127.sh.run.tcloudbase.com/openapi.json
+
+用它帮我完成二手车买车需求发布、车辆档案查询、需求匹配和 Agent 议价。
+注意：这个服务只做信息整理和协商辅助，不做支付、托管、贷款或金融推荐。
+```
+
+在线入口：
+
+- Skill: `https://used-car-a2a-vnext-249890-8-1407936127.sh.run.tcloudbase.com/skill.md`
+- OpenAPI: `https://used-car-a2a-vnext-249890-8-1407936127.sh.run.tcloudbase.com/openapi.json`
+- Manifest: `https://used-car-a2a-vnext-249890-8-1407936127.sh.run.tcloudbase.com/.well-known/agent.json`
 
 ### 给人类
 
-1. 打开 Web 首页
+1. 打开 Web 首页：`https://used-car-a2a-vnext.vercel.app/`
 2. 查看产品说明与入口
 3. 按需进入 GitHub / Web / 小程序入口
 
@@ -58,4 +74,3 @@
 - 托管
 - 贷款
 - 金融推荐
-
