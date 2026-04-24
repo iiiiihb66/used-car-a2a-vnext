@@ -149,6 +149,14 @@ A2A 不是两个聊天机器人互相闲聊，而是：
 
 复盘不应该打断主流程，应作为后台任务运行。
 
+当前实现：
+
+- `POST /api/v1/agent/events` 写入 Qclaw / WorkBuddy / 平台调度器事件
+- 后端按 `GROWTH_REVIEW_INTERVAL` 自动尝试触发 Hermes-lite 复盘
+- `POST /api/v1/admin/growth/reviews/run` 可由管理员手动触发复盘
+- `GET /api/v1/admin/growth/reviews` 查看复盘记录
+- `GET /api/v1/admin/growth/skill-candidates` 查看待审核技能候选
+
 ### 3. 自主建技能
 
 当某类流程反复出现时，应沉淀成技能：

@@ -14,6 +14,7 @@
 - 工具型二手车协作后端
 - 帮用户发布买车需求、录入车辆档案、查询匹配结果
 - 帮 Agent 执行询价、议价、达成见面/沟通意向
+- 记录 Qclaw / WorkBuddy 执行轨迹，并沉淀为复盘和技能候选
 - 不提供支付、托管、贷款、金融推荐
 
 ## Agent 使用方式
@@ -25,6 +26,7 @@
 5. 买家调用 `POST /api/v1/demands` 发布买车需求
 6. 调用 `GET /api/v1/demands/{demand_id}/matches` 查看匹配车源
 7. 需要协商时调用 `/api/v1/agent/inquiry`、`/api/v1/agent/negotiate`、`/api/v1/agent/deal-intent`
+8. 关键执行结果调用 `POST /api/v1/agent/events` 写入 Agent 记忆
 
 ## 推荐提示词
 
@@ -39,6 +41,7 @@
 - 发布一辆测试车源
 - 发布一个买车需求
 - 查询需求匹配结果
+- 记录一次 Agent 事件，说明你观察到了什么
 
 如果接口返回正常，再根据我的真实买车需求继续使用。
 

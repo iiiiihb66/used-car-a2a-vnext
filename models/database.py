@@ -76,6 +76,9 @@ def init_database():
     - negotiation_history: 议价历史表
     - point_transactions: 积分流水表
     - seller_reports: 卖家举报表
+    - agent_events: Agent 事件记忆表
+    - growth_reviews: Hermes-lite 复盘表
+    - skill_candidates: 技能候选表
     """
     from models.user import User, UserPersona
     from models.car import CarMemory
@@ -87,6 +90,7 @@ def init_database():
     from models.point_transaction import PointTransaction
     from models.seller_report import SellerReport
     from models.agent_event import AgentEvent
+    from models.growth import GrowthReview, SkillCandidate
     
     Base.metadata.create_all(bind=engine)
     print("✅ 数据库表结构创建完成")
@@ -107,6 +111,7 @@ def reset_database():
     from models.point_transaction import PointTransaction
     from models.seller_report import SellerReport
     from models.agent_event import AgentEvent
+    from models.growth import GrowthReview, SkillCandidate
     
     Base.metadata.drop_all(bind=engine)
     Base.metadata.create_all(bind=engine)

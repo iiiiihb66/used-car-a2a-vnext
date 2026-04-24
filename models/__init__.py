@@ -12,6 +12,8 @@ from models.demand import DemandPool
 from models.negotiation import NegotiationHistory
 from models.point_transaction import PointTransaction
 from models.seller_report import SellerReport
+from models.agent_event import AgentEvent
+from models.growth import GrowthReview, SkillCandidate
 
 __all__ = [
     "User",
@@ -26,5 +28,8 @@ __all__ = [
     "DemandPool",
     "NegotiationHistory",
     "PointTransaction",
-    "SellerReport"
+    "SellerReport",
+    "AgentEvent",
+    "GrowthReview",
+    "SkillCandidate"
 ]

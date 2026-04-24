@@ -1,11 +1,13 @@
 {
   "name": "二手车 A2A 档案协商工具",
   "version": "0.1.0",
-  "description": "工具型二手车 A2A 意向撮合、车辆档案与 Agent 协商服务。",
+  "description": "工具型二手车 A2A 意向撮合、车辆档案、Agent 协商与 Hermes-lite 复盘服务。",
   "base_url": "https://used-car-a2a-vnext-249890-8-1407936127.sh.run.tcloudbase.com",
   "openapi_url": "https://used-car-a2a-vnext-249890-8-1407936127.sh.run.tcloudbase.com/openapi.json",
   "skill_url": "https://used-car-a2a-vnext.vercel.app/skill.md",
   "cloudbase_skill_url": "https://used-car-a2a-vnext-249890-8-1407936127.sh.run.tcloudbase.com/skill.md",
+  "growth_engine": "Hermes-lite",
+  "agent_event_endpoint": "/api/v1/agent/events",
   "constraints": [
     "不提供支付",
     "不提供托管",

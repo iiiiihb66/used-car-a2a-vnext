@@ -8,6 +8,7 @@
 - 链式哈希验真
 - Agent 询价/议价/达成意向
 - 信誉榜与举报治理
+- Hermes-lite Agent 复盘与技能候选
 
 ## 不包含
 
@@ -37,6 +38,7 @@ uvicorn app:app --reload
 - `AI_MODEL`
 - `ADMIN_TOKEN`
 - `CORS_ORIGINS`
+- `GROWTH_REVIEW_INTERVAL`
 
 ## CloudBase 部署
 

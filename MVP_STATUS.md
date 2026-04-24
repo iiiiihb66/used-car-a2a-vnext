@@ -11,6 +11,7 @@
 5. Agent 发起询价 / 议价 / 达成成交意向
 6. 车辆档案写入生命周期记录并进行链式校验
 7. 举报卖家并由管理员审核
+8. Qclaw / WorkBuddy 事件写入后端，并进入 Hermes-lite 自动复盘
 
 当前版本定位：
 
@@ -60,6 +61,9 @@
 - `GET /api/v1/points/{user_id}`
 - `GET /api/v1/admin/agent-events`
 - `GET /api/v1/admin/analytics/funnel`
+- `POST /api/v1/admin/growth/reviews/run`
+- `GET /api/v1/admin/growth/reviews`
+- `GET /api/v1/admin/growth/skill-candidates`
 
 ### 举报与治理
 
@@ -95,6 +99,7 @@
 - AI 大模型能力依赖 CloudBase AI 配置完成后才是正式可用
 - 生产数据库尚未切到 CloudBase SQL / MySQL
 - MCP 标准服务器尚未封装，当前先用 HTTP API 验证 Agent 闭环
+- Hermes-lite 目前是规则复盘，后续可接腾讯混元生成更高质量总结
 
 ## 上线前必须补齐的配置
 
@@ -106,6 +111,7 @@
 - `AI_MODEL`
 - `ADMIN_TOKEN`
 - `CORS_ORIGINS`
+- `GROWTH_REVIEW_INTERVAL`，默认 `10`
 
 ### 推荐值
 
@@ -138,6 +144,8 @@
 - Agent 协商
 - 透明车档
 - 信誉与举报
+- Agent 事件复盘
+- 技能候选生成
 
 暂不适合现在做的：
 

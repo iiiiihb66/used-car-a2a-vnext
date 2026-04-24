@@ -25,6 +25,7 @@ from pydantic import BaseModel, Field
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from a2a.bus import get_a2a_bus
+from memory.growth_engine import GrowthEngine
 from memory.memory_service import get_memory_service
 from mcp.tools import init_tool_registry
 from models.database import SessionLocal, get_db, init_database
@@ -33,6 +34,7 @@ from models.car import CarMemory
 from models.car_lifecycle_record import CarLifecycleRecord
 from models.conversation import Conversation
 from models.demand import DemandPool
+from models.growth import GrowthReview, SkillCandidate
 from models.penalty import PenaltyEngine
 from models.point_transaction import PointTransaction
 from models.reputation import ReputationEngine
@@ -51,6 +53,7 @@ APP_DESCRIPTION = """
 
 不提供支付、托管、贷款或金融服务，仅作为信息整理与协商辅助工具。
 """
+GROWTH_REVIEW_INTERVAL = int(os.getenv("GROWTH_REVIEW_INTERVAL", "10"))
 
 
 def _cors_origins() -> List[str]:
@@ -200,6 +203,12 @@ class AgentEventCreate(BaseModel):
     score: Optional[float] = Field(None, description="可选评分")
 
 
+class GrowthReviewRunRequest(BaseModel):
+    after_event_id: Optional[int] = Field(None, description="从某个事件 ID 之后开始复盘；为空则接上次复盘")
+    limit: int = Field(30, ge=1, le=200, description="本次最多复盘事件数")
+    min_events: int = Field(1, ge=1, le=200, description="最少事件数，不足则跳过")
+
+
 @app.get("/")
 async def root() -> Dict[str, Any]:
     return {
@@ -210,7 +219,8 @@ async def root() -> Dict[str, Any]:
         "base_url": PUBLIC_BASE_URL,
         "openapi": f"{PUBLIC_BASE_URL}/openapi.json",
         "skill": f"{PUBLIC_BASE_URL}/skill.md",
-        "message": "服务在线。当前版本仅提供档案协商与信誉治理能力。",
+        "growth_engine": "Hermes-lite",
+        "message": "服务在线。当前版本提供档案协商、信誉治理和 Agent 成长复盘能力。",
     }
 
 
@@ -231,6 +241,7 @@ async def skill_markdown() -> str:
 - 工具型二手车协作后端
 - 帮用户发布买车需求、录入车辆档案、查询匹配结果
 - 帮 Agent 执行询价、议价、达成见面/沟通意向
+- 记录 Qclaw / WorkBuddy 执行轨迹，并沉淀为复盘和技能候选
 - 不提供支付、托管、贷款、金融推荐
 
 ## Agent 使用方式
@@ -242,6 +253,7 @@ async def skill_markdown() -> str:
 5. 买家调用 `POST /api/v1/demands` 发布买车需求
 6. 调用 `GET /api/v1/demands/{{demand_id}}/matches` 查看匹配车源
 7. 需要协商时调用 `/api/v1/agent/inquiry`、`/api/v1/agent/negotiate`、`/api/v1/agent/deal-intent`
+8. 关键执行结果调用 `POST /api/v1/agent/events` 写入 Agent 记忆
 
 ## 推荐提示词
 
@@ -706,7 +718,14 @@ async def record_agent_event(
     db.add(event)
     db.commit()
     db.refresh(event)
-    return {"success": True, "message": "Agent 事件已记录", "data": event.to_dict()}
+
+    auto_review = GrowthEngine(db).maybe_auto_review(interval=GROWTH_REVIEW_INTERVAL)
+    return {
+        "success": True,
+        "message": "Agent 事件已记录",
+        "data": event.to_dict(),
+        "growth_review": auto_review,
+    }
 
 
 @app.get("/api/v1/admin/agent-events")
@@ -730,6 +749,42 @@ async def list_agent_events(
     return {"success": True, "total": len(events), "data": [event.to_dict() for event in events]}
 
 
+@app.post("/api/v1/admin/growth/reviews/run")
+async def run_growth_review(
+    request: GrowthReviewRunRequest,
+    db=Depends(get_db),
+    _: None = Depends(require_admin_token),
+) -> Dict[str, Any]:
+    result = GrowthEngine(db).run_review(
+        trigger="manual",
+        after_event_id=request.after_event_id,
+        limit=request.limit,
+        min_events=request.min_events,
+    )
+    return result
+
+
+@app.get("/api/v1/admin/growth/reviews")
+async def list_growth_reviews(
+    limit: int = Query(50, ge=1, le=200),
+    db=Depends(get_db),
+    _: None = Depends(require_admin_token),
+) -> Dict[str, Any]:
+    reviews = GrowthEngine(db).list_reviews(limit=limit)
+    return {"success": True, "total": len(reviews), "data": reviews}
+
+
+@app.get("/api/v1/admin/growth/skill-candidates")
+async def list_skill_candidates(
+    status: Optional[str] = Query(None),
+    limit: int = Query(50, ge=1, le=200),
+    db=Depends(get_db),
+    _: None = Depends(require_admin_token),
+) -> Dict[str, Any]:
+    candidates = GrowthEngine(db).list_skill_candidates(status=status, limit=limit)
+    return {"success": True, "total": len(candidates), "data": candidates}
+
+
 @app.get("/api/v1/admin/analytics/funnel")
 async def get_admin_funnel(
     limit_unmatched: int = Query(20, ge=1, le=100),
@@ -750,6 +805,8 @@ async def get_admin_funnel(
     negotiations = db.query(Conversation).filter(Conversation.intent == "price_negotiate").count()
     deal_intents = db.query(Conversation).filter(Conversation.intent == "deal_intent").count()
     agent_events = db.query(AgentEvent).count()
+    growth_reviews = db.query(GrowthReview).count()
+    skill_candidates = db.query(SkillCandidate).count()
 
     unmatched_demands = []
     active_demand_rows = (
@@ -780,6 +837,8 @@ async def get_admin_funnel(
                 "negotiations": negotiations,
                 "deal_intents": deal_intents,
                 "agent_events": agent_events,
+                "growth_reviews": growth_reviews,
+                "skill_candidates": skill_candidates,
             },
             "manager_attention": {
                 "unmatched_active_demands": unmatched_demands,
