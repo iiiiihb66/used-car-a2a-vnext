@@ -77,3 +77,17 @@ This rule applies to:
 2. Replace local SQLite with CloudBase SQL in production
 3. Connect Mini Program frontend to `/api/v1/*`
 4. Add lightweight API regression tests for the production endpoints
+
+## Future Architecture Guardrail
+
+The public repository is acceptable for early Agent installation, demos, and
+integration testing. Before real commercial usage, split the system into:
+
+- Public shell: `skill.md`, `openapi.json`, README, SDK examples, frontend shell,
+  and non-sensitive request/response contracts
+- Private Tencent Cloud core: matching/ranking algorithms, seller weighting,
+  reputation scoring rules, negotiation strategy, risk controls, anti-abuse
+  logic, admin workflows, databases, and logs
+
+Public code should expose the protocol and entrypoints, not the proprietary
+decision rules.
