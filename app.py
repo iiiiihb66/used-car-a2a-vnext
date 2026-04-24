@@ -97,6 +97,25 @@ def require_admin_token(
         raise HTTPException(status_code=401, detail="管理员令牌无效")
 
 
+def public_growth_review_result(result: Dict[str, Any]) -> Dict[str, Any]:
+    """公开事件写入接口只返回复盘触发状态，完整内容仅管理员可见。"""
+    public_result = {
+        "success": result.get("success", False),
+        "triggered": result.get("triggered", False),
+    }
+    if not result.get("triggered"):
+        public_result["reason"] = result.get("reason")
+        public_result["pending_events"] = result.get("pending_events")
+        public_result["interval"] = result.get("interval")
+        return public_result
+
+    review = result.get("review") or {}
+    public_result["review_id"] = review.get("review_id")
+    public_result["events_count"] = review.get("events_count")
+    public_result["skill_candidates_count"] = len(result.get("skill_candidates") or [])
+    return public_result
+
+
 class UserCreate(BaseModel):
     name: str = Field(..., description="用户名称")
     email: str = Field(..., description="邮箱")
@@ -724,7 +743,7 @@ async def record_agent_event(
         "success": True,
         "message": "Agent 事件已记录",
         "data": event.to_dict(),
-        "growth_review": auto_review,
+        "growth_review": public_growth_review_result(auto_review),
     }
 
 
