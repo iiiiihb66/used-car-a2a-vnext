@@ -60,6 +60,8 @@ uvicorn app:app --reload
 
 见 [DEPLOY_CLOUDBASE.md](/Users/fuhongbo/Documents/Antigravity/项目对比/used-car-a2a-vnext/DEPLOY_CLOUDBASE.md)
 
+SQLite 备份和恢复见 [SQLITE_OPERATIONS.md](/Users/fuhongbo/Documents/Antigravity/项目对比/used-car-a2a-vnext/SQLITE_OPERATIONS.md)
+
 ## 产品进化路线
 
 见 [PRODUCT_EVOLUTION.md](/Users/fuhongbo/Documents/Antigravity/项目对比/used-car-a2a-vnext/PRODUCT_EVOLUTION.md)

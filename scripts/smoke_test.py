@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import uuid
 import sys
 from pathlib import Path
@@ -8,6 +9,7 @@ from fastapi.testclient import TestClient
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
+os.environ.setdefault("ADMIN_TOKEN", "test-admin-token")
 
 from app import app
 
@@ -141,9 +143,17 @@ def main() -> None:
         assert len(detail["data"]["conversations"]) >= 4, detail["data"]
         assert len(detail["data"]["events"]) >= 3, detail["data"]
 
+        backup = client.get(
+            "/api/v1/admin/database/backup",
+            headers={"X-Admin-Token": os.environ["ADMIN_TOKEN"]},
+        )
+        assert backup.status_code == 200, backup.text
+        assert backup.content.startswith(b"SQLite format 3"), "admin database backup is not SQLite"
+
         openapi = client.get("/openapi.json")
         assert openapi.status_code == 200, openapi.text
         assert "/api/v1/agent/sessions" in openapi.json()["paths"]
+        assert "/api/v1/admin/database/backup" in openapi.json()["paths"]
 
 
 if __name__ == "__main__":

@@ -71,6 +71,8 @@ tcb cloudrun deploy -e <ENV_ID> -s <SERVICE_NAME> --source .
 
 这条路径的优点是改动最小、成本最低，适合先验证产品闭环。
 
+线上 SQLite 的部署前备份和必要时恢复，见 `SQLITE_OPERATIONS.md`。
+
 ## GitHub Actions 自动部署
 
 仓库已提供手动触发的工作流:

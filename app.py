@@ -12,15 +12,20 @@
 from __future__ import annotations
 
 import os
+import shutil
+import sqlite3
 import sys
 from datetime import datetime
+from pathlib import Path
+from tempfile import mkdtemp
 from typing import Any, Dict, List, Optional
 from uuid import uuid4
 
-from fastapi import Depends, FastAPI, Header, HTTPException, Query
+from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import PlainTextResponse
+from fastapi.responses import FileResponse, PlainTextResponse
 from pydantic import BaseModel, Field
+from starlette.background import BackgroundTask
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
@@ -29,7 +34,7 @@ from a2a.message import MessageBuilder
 from memory.growth_engine import GrowthEngine
 from memory.memory_service import get_memory_service
 from mcp.tools import init_tool_registry
-from models.database import SessionLocal, get_db, init_database
+from models.database import DATABASE_URL, SessionLocal, engine, get_db, init_database
 from models.agent_event import AgentEvent
 from models.car import CarMemory
 from models.car_lifecycle_record import CarLifecycleRecord
@@ -96,6 +101,31 @@ def require_admin_token(
         raise HTTPException(status_code=503, detail="管理员能力尚未配置")
     if x_admin_token != expected:
         raise HTTPException(status_code=401, detail="管理员令牌无效")
+
+
+def _sqlite_database_path() -> Path:
+    prefix = "sqlite:///"
+    if not DATABASE_URL.startswith(prefix):
+        raise HTTPException(status_code=400, detail="当前数据库不是 SQLite")
+    return Path(DATABASE_URL[len(prefix):]).expanduser().resolve()
+
+
+def _create_sqlite_backup(source: Path, target: Path) -> None:
+    target.parent.mkdir(parents=True, exist_ok=True)
+    with sqlite3.connect(source) as src_conn, sqlite3.connect(target) as dst_conn:
+        src_conn.backup(dst_conn)
+
+
+def _assert_valid_sqlite(path: Path) -> None:
+    try:
+        with sqlite3.connect(path) as conn:
+            result = conn.execute("PRAGMA integrity_check").fetchone()
+    except sqlite3.DatabaseError as exc:
+        raise HTTPException(status_code=400, detail=f"SQLite 文件无效: {exc}") from exc
+
+    if not result or result[0] != "ok":
+        detail = result[0] if result else "unknown"
+        raise HTTPException(status_code=400, detail=f"SQLite 完整性检查失败: {detail}")
 
 
 def public_growth_review_result(result: Dict[str, Any]) -> Dict[str, Any]:
@@ -1147,6 +1177,69 @@ async def record_agent_event(
         "data": event.to_dict(),
         "growth_review": public_growth_review_result(auto_review),
     }
+
+
+@app.get("/api/v1/admin/database/backup")
+async def download_database_backup(
+    _: None = Depends(require_admin_token),
+):
+    db_path = _sqlite_database_path()
+    if not db_path.exists():
+        raise HTTPException(status_code=404, detail="SQLite 数据库文件不存在")
+
+    temp_dir = Path(mkdtemp(prefix="sqlite-backup-"))
+    timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+    backup_path = temp_dir / f"{db_path.stem}_{timestamp}.db"
+    _create_sqlite_backup(db_path, backup_path)
+
+    return FileResponse(
+        path=str(backup_path),
+        filename=backup_path.name,
+        media_type="application/octet-stream",
+        background=BackgroundTask(lambda: shutil.rmtree(temp_dir, ignore_errors=True)),
+    )
+
+
+@app.post("/api/v1/admin/database/restore")
+async def restore_database_backup(
+    request: Request,
+    _: None = Depends(require_admin_token),
+) -> Dict[str, Any]:
+    db_path = _sqlite_database_path()
+    payload = await request.body()
+    if not payload:
+        raise HTTPException(status_code=400, detail="请求体为空，请上传 SQLite 备份文件")
+
+    temp_dir = Path(mkdtemp(prefix="sqlite-restore-"))
+    try:
+        uploaded_path = temp_dir / "uploaded.db"
+        uploaded_path.write_bytes(payload)
+        _assert_valid_sqlite(uploaded_path)
+
+        db_path.parent.mkdir(parents=True, exist_ok=True)
+        pre_restore_backup = None
+        if db_path.exists():
+            timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+            pre_restore_backup = db_path.with_name(f"{db_path.stem}.pre_restore_{timestamp}.db")
+            _create_sqlite_backup(db_path, pre_restore_backup)
+
+        replacement_path = temp_dir / "replacement.db"
+        _create_sqlite_backup(uploaded_path, replacement_path)
+
+        engine.dispose()
+        replacement_path.replace(db_path)
+        init_database()
+
+        return {
+            "success": True,
+            "message": "SQLite 数据库已恢复",
+            "data": {
+                "database_path": str(db_path),
+                "pre_restore_backup": str(pre_restore_backup) if pre_restore_backup else None,
+            },
+        }
+    finally:
+        shutil.rmtree(temp_dir, ignore_errors=True)
 
 
 @app.get("/api/v1/admin/agent-events")

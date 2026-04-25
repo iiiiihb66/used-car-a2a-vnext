@@ -12,6 +12,7 @@
 2. `CODEX_CLOUD_HANDOFF.md`
 3. `README.md`
 4. `DEPLOY_CLOUDBASE.md`
+5. `SQLITE_OPERATIONS.md`
 
 ## 项目目标
 
@@ -61,6 +62,13 @@ c6a7286 feat: support sqlite-first cloudbase mvp with backup script
 3. `.env.example` 增加 SQLite 相关配置。
 4. `README.md`、`DEPLOY_CLOUDBASE.md`、`GITHUB_ACTIONS.md`、`CODEX_CLOUD_HANDOFF.md` 更新为免费版 SQLite-first 路线。
 
+后续补充：
+
+1. `GET /api/v1/admin/database/backup` 支持从线上下载 SQLite 备份。
+2. `POST /api/v1/admin/database/restore` 支持必要时恢复 SQLite 备份。
+3. `scripts/cloud_sqlite_backup.py` 提供本地下载/恢复入口。
+4. `SQLITE_OPERATIONS.md` 固化部署前后操作流程。
+
 ## 当前部署策略
 
 CloudBase 环境：
@@ -109,6 +117,7 @@ used-car-a2a-vnext
 - CODEX_CLOUD_HANDOFF.md
 - README.md
 - DEPLOY_CLOUDBASE.md
+- SQLITE_OPERATIONS.md
 
 关键决策：
 - 不升级 CloudBase 套餐
