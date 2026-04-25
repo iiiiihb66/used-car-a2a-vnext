@@ -11,6 +11,10 @@ build
 .git
 .gitignore
 .env
+.env.*
+.secrets
+.secrets/
+cloudbaserc.json
 .venv
 venv
 *.db
