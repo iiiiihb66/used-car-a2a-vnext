@@ -95,24 +95,33 @@ class A2ABus:
                 "details": trust_result
             }
         
-        # 2. 路由到目标 Agent
-        routed = await self._route_message(message)
-        
+        # 2. 路由到目标 Agent；若无实时订阅者，则回退到后端内置 UserAgent
+        routed, agent_response = await self._route_message(message)
+
         # 3. 保存到对话历史
         await self._save_to_history(message)
-        
+
+        # 3.1 保存目标 Agent 的回复，形成完整会话链
+        if agent_response:
+            reply_payload = dict(agent_response)
+            reply_payload.setdefault("content", agent_response.get("content"))
+            reply_message = message.create_reply(payload=reply_payload)
+            reply_message.status = "delivered"
+            await self._save_to_history(reply_message)
+
         # 4. 根据意图触发 MCP 工具 + 记忆注入 + Social Graph
         tool_result = await self._trigger_tools(message)
-        
+
         return {
             "success": True,
             "message_id": message.id,
             "routed": routed,
+            "agent_response": agent_response,
             "tool_result": tool_result,
             "timestamp": message.timestamp
         }
-    
-    async def _route_message(self, message: A2AMessage) -> bool:
+
+    async def _route_message(self, message: A2AMessage) -> tuple[bool, Optional[Dict[str, Any]]]:
         """
         路由消息到目标 Agent
         
@@ -120,10 +129,10 @@ class A2ABus:
             message: A2A 消息
         
         Returns:
-            是否成功路由
+            (是否成功路由, Agent 回复)
         """
         target_agent = message.to_agent
-        
+
         # 如果目标在线，实时推送
         if self.is_online(target_agent) and target_agent in self._subscribers:
             callback = self._subscribers[target_agent]
@@ -133,16 +142,39 @@ class A2ABus:
                 else:
                     callback(message)
                 message.status = "delivered"
-                return True
+                return True, None
             except Exception as e:
                 message.error = str(e)
                 message.status = "failed"
-                return False
-        
+                return False, None
+
+        # 目标未在线时，直接回退到后端内置 UserAgent，保证云端 API 可闭环处理
+        agent_response = await self._invoke_embedded_agent(message)
+        if agent_response is not None:
+            message.status = "delivered"
+            return True, agent_response
+
         # 如果目标不在线，存入队列
         self._message_queues[target_agent].append(message)
         message.status = "queued"
-        return True
+        return True, None
+
+    async def _invoke_embedded_agent(self, message: A2AMessage) -> Optional[Dict[str, Any]]:
+        """使用后端内置 UserAgent 处理消息，供公网 API 直接驱动 Agent 协商。"""
+        if self._db_session is None or message.to_user_id <= 0:
+            return None
+
+        try:
+            from agents.user_agent import get_user_agent
+
+            target_agent = get_user_agent(message.to_user_id, self._db_session)
+            return await target_agent.handle_message(message)
+        except Exception as e:
+            print(f"⚠️ 内置 Agent 处理失败: {e}")
+            return {
+                "content": f"[错误] Agent 处理失败: {str(e)}",
+                "error": str(e),
+            }
     
     async def _verify_trust(self, message: A2AMessage) -> Dict[str, Any]:
         """
