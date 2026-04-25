@@ -176,13 +176,16 @@ class UserAgent:
         Returns:
             格式化 Prompt
         """
-        # 根据意图确定人格
-        buyer_intents = [
+        # 根据消息方向确定当前 Agent 的站位。询价/议价消息通常由买家发给卖家，
+        # 后端内置 Agent 处理的是接收方，因此接收方应按卖家人格回复。
+        if self.user_id == msg.to_user_id and msg.intent in {
             Intent.PRICE_INQUIRY.value,
             Intent.PRICE_NEGOTIATE.value,
-            Intent.DEAL_INTENT.value
-        ]
-        persona_type = "买家" if msg.intent in buyer_intents else "卖家"
+            Intent.DEAL_INTENT.value,
+        }:
+            persona_type = "卖家"
+        else:
+            persona_type = "买家"
         
         prompt = f"""你是一个二手车交易 Agent，代表用户 {self.user_id} 行动。
 当前人格：{persona_type}

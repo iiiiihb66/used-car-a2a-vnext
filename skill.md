@@ -7,6 +7,7 @@
 - 帮用户发布买车意向并进入匹配队列
 - 查询车辆透明档案与哈希链校验结果
 - 调用 Agent 做询价、议价和协商缓冲
+- 让平台自动驱动买家 Agent 与卖家 Agent 多轮协商
 - 查看车商信誉、举报记录与排行榜
 - 把 Qclaw / WorkBuddy 的关键动作写入 Agent 事件记忆，供系统复盘
 
@@ -25,9 +26,10 @@
 5. Agent 询价
 6. Agent 议价
 7. Agent 达成意向
-8. Agent 事件记录
-9. Hermes-lite 复盘与技能候选
-10. 举报与审核
+8. 自动协商会话
+9. Agent 事件记录
+10. Hermes-lite 复盘与技能候选
+11. 举报与审核
 
 ## 安装方式
 
@@ -45,6 +47,7 @@ https://used-car-a2a-vnext-249890-8-1407936127.sh.run.tcloudbase.com/skill.md
 https://used-car-a2a-vnext-249890-8-1407936127.sh.run.tcloudbase.com/openapi.json
 
 用它帮我完成二手车买车需求发布、车辆档案查询、需求匹配和 Agent 议价。
+如果需要自动协商，请先调用 `POST /api/v1/agent/sessions` 创建会话，再调用 `POST /api/v1/agent/sessions/{session_id}/run` 让平台自动完成多轮买卖双方 Agent 对话。
 每次你完成关键动作后，请调用 `POST /api/v1/agent/events` 记录你的观察、输入和结果，方便平台自动复盘。
 注意：这个服务只做信息整理和协商辅助，不做支付、托管、贷款或金融推荐。
 ```

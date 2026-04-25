@@ -25,6 +25,7 @@ from pydantic import BaseModel, Field
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from a2a.bus import get_a2a_bus
+from a2a.message import MessageBuilder
 from memory.growth_engine import GrowthEngine
 from memory.memory_service import get_memory_service
 from mcp.tools import init_tool_registry
@@ -114,6 +115,101 @@ def public_growth_review_result(result: Dict[str, Any]) -> Dict[str, Any]:
     public_result["events_count"] = review.get("events_count")
     public_result["skill_candidates_count"] = len(result.get("skill_candidates") or [])
     return public_result
+
+
+def _agent_response_content(result: Dict[str, Any]) -> str:
+    response = (result or {}).get("agent_response") or {}
+    content = response.get("content")
+    if content:
+        return str(content)
+    error = response.get("error")
+    if error:
+        return f"[Agent error] {error}"
+    return ""
+
+
+def _record_agent_event(
+    db,
+    *,
+    actor_agent: str,
+    actor_role: str,
+    event_type: str,
+    status: str,
+    user_id: Optional[int] = None,
+    related_user_id: Optional[int] = None,
+    related_car_id: Optional[str] = None,
+    related_conversation_id: Optional[str] = None,
+    input_snapshot: Optional[Dict[str, Any]] = None,
+    output_snapshot: Optional[Dict[str, Any]] = None,
+    observation: Optional[str] = None,
+    score: Optional[float] = None,
+) -> Dict[str, Any]:
+    event = AgentEvent(
+        actor_agent=actor_agent,
+        actor_role=actor_role,
+        event_type=event_type,
+        status=status,
+        user_id=user_id,
+        related_user_id=related_user_id,
+        related_car_id=related_car_id,
+        related_conversation_id=related_conversation_id,
+        input_snapshot=input_snapshot or {},
+        output_snapshot=output_snapshot or {},
+        observation=observation,
+        score=score,
+    )
+    db.add(event)
+    db.commit()
+    db.refresh(event)
+    return event.to_dict()
+
+
+def _get_agent_session_config(db, session_id: str) -> Dict[str, Any]:
+    event = (
+        db.query(AgentEvent)
+        .filter(
+            AgentEvent.event_type == "auto_session_created",
+            AgentEvent.related_conversation_id == session_id,
+        )
+        .order_by(AgentEvent.id.desc())
+        .first()
+    )
+    if not event:
+        raise HTTPException(status_code=404, detail="自动协商会话不存在")
+    return event.input_snapshot or {}
+
+
+def _calculate_offer_price(
+    car: CarMemory,
+    config: Dict[str, Any],
+    round_index: int,
+) -> float:
+    display_price = float(car.price or 0)
+    target_price = config.get("buyer_target_price")
+    budget_max = config.get("buyer_budget_max")
+
+    if target_price:
+        base_offer = float(target_price)
+    elif budget_max:
+        base_offer = min(float(budget_max), display_price * 0.96)
+    else:
+        base_offer = display_price * 0.96
+
+    # 每轮小幅让步，但不超过预算上限和展示价。
+    offer = base_offer + max(round_index - 1, 0) * display_price * 0.012
+    if budget_max:
+        offer = min(offer, float(budget_max))
+    return round(min(offer, display_price), 2)
+
+
+def _is_deal_ready(car: CarMemory, proposed_price: float, seller_content: str) -> bool:
+    target_price = float(car.target_price or car.price or 0)
+    accepted_by_price = bool(target_price and proposed_price >= target_price * 0.98)
+    accepted_by_text = any(
+        keyword in seller_content
+        for keyword in ["可以接受", "同意成交", "成交", "接受这个价格", "价格可以"]
+    )
+    return accepted_by_price or accepted_by_text
 
 
 class UserCreate(BaseModel):
@@ -228,6 +324,30 @@ class GrowthReviewRunRequest(BaseModel):
     min_events: int = Field(1, ge=1, le=200, description="最少事件数，不足则跳过")
 
 
+class AgentSessionCreate(BaseModel):
+    buyer_id: int = Field(..., description="买家用户ID")
+    seller_id: int = Field(..., description="卖家用户ID")
+    car_id: str = Field(..., description="车辆ID")
+    buyer_goal: str = Field(
+        "家用 SUV，车况透明，价格合理，优先混动/新能源",
+        description="买家目标",
+    )
+    initial_message: Optional[str] = Field(None, description="第一轮询价内容")
+    buyer_budget_min: Optional[float] = Field(None, description="买家最低预算，单位万元")
+    buyer_budget_max: Optional[float] = Field(None, description="买家最高预算，单位万元")
+    buyer_target_price: Optional[float] = Field(None, description="买家目标报价，单位万元")
+    max_rounds: int = Field(3, ge=1, le=6, description="自动协商最大回合数")
+    auto_deal: bool = Field(False, description="达到条件时是否自动生成成交意向")
+    buyer_agent_name: str = Field("Qclaw-buyer", description="买家 Agent 名称")
+    seller_agent_name: str = Field("WorkBuddy-seller", description="卖家 Agent 名称")
+
+
+class AgentSessionRunRequest(BaseModel):
+    max_rounds: Optional[int] = Field(None, ge=1, le=6, description="覆盖最大回合数")
+    auto_deal: Optional[bool] = Field(None, description="覆盖自动成交意向开关")
+    buyer_target_price: Optional[float] = Field(None, description="覆盖买家目标报价，单位万元")
+
+
 @app.get("/")
 async def root() -> Dict[str, Any]:
     return {
@@ -260,6 +380,7 @@ async def skill_markdown() -> str:
 - 工具型二手车协作后端
 - 帮用户发布买车需求、录入车辆档案、查询匹配结果
 - 帮 Agent 执行询价、议价、达成见面/沟通意向
+- 帮平台自动驱动买家 Agent 与卖家 Agent 多轮协商
 - 记录 Qclaw / WorkBuddy 执行轨迹，并沉淀为复盘和技能候选
 - 不提供支付、托管、贷款、金融推荐
 
@@ -271,8 +392,10 @@ async def skill_markdown() -> str:
 4. 车商调用 `POST /api/v1/cars?user_id={{seller_id}}` 发布车源
 5. 买家调用 `POST /api/v1/demands` 发布买车需求
 6. 调用 `GET /api/v1/demands/{{demand_id}}/matches` 查看匹配车源
-7. 需要协商时调用 `/api/v1/agent/inquiry`、`/api/v1/agent/negotiate`、`/api/v1/agent/deal-intent`
-8. 关键执行结果调用 `POST /api/v1/agent/events` 写入 Agent 记忆
+7. 需要单步协商时调用 `/api/v1/agent/inquiry`、`/api/v1/agent/negotiate`、`/api/v1/agent/deal-intent`
+8. 需要自动协商时调用 `POST /api/v1/agent/sessions` 创建会话，再调用 `POST /api/v1/agent/sessions/{{session_id}}/run`
+9. 调用 `GET /api/v1/agent/sessions/{{session_id}}` 查看完整对话、事件和复盘轨迹
+10. 关键执行结果调用 `POST /api/v1/agent/events` 写入 Agent 记忆
 
 ## 推荐提示词
 
@@ -287,6 +410,7 @@ async def skill_markdown() -> str:
 - 发布一辆测试车源
 - 发布一个买车需求
 - 查询需求匹配结果
+- 创建并运行一次自动协商会话
 
 如果接口返回正常，再根据我的真实买车需求继续使用。
 """
@@ -695,6 +819,284 @@ async def send_deal_intent(
         agreed_price=request.agreed_price,
     )
     return {"success": True, "data": result}
+
+
+@app.post("/api/v1/agent/sessions")
+async def create_agent_session(
+    request: AgentSessionCreate,
+    db=Depends(get_db),
+) -> Dict[str, Any]:
+    buyer = db.query(User).filter(User.id == request.buyer_id).first()
+    seller = db.query(User).filter(User.id == request.seller_id).first()
+    car = db.query(CarMemory).filter(CarMemory.car_id == request.car_id).first()
+    if not buyer:
+        raise HTTPException(status_code=404, detail="买家不存在")
+    if not seller:
+        raise HTTPException(status_code=404, detail="卖家不存在")
+    if not car:
+        raise HTTPException(status_code=404, detail="车辆不存在")
+    if car.owner_id != request.seller_id:
+        raise HTTPException(status_code=400, detail="车辆不属于该卖家")
+
+    session_id = f"auto_{datetime.utcnow().strftime('%Y%m%d%H%M%S')}_{uuid4().hex[:8]}"
+    config = request.dict()
+    config["session_id"] = session_id
+
+    event = _record_agent_event(
+        db,
+        actor_agent="platform-orchestrator",
+        actor_role="platform",
+        event_type="auto_session_created",
+        status="succeeded",
+        user_id=request.buyer_id,
+        related_user_id=request.seller_id,
+        related_car_id=request.car_id,
+        related_conversation_id=session_id,
+        input_snapshot=config,
+        output_snapshot={
+            "buyer": buyer.to_dict(),
+            "seller": seller.to_dict(),
+            "car": car.to_dict(),
+        },
+        observation="自动协商会话已创建，等待平台调度买家 Agent 与卖家 Agent 多轮对话。",
+    )
+
+    return {
+        "success": True,
+        "data": {
+            "session_id": session_id,
+            "event": event,
+            "run_url": f"{PUBLIC_BASE_URL}/api/v1/agent/sessions/{session_id}/run",
+            "detail_url": f"{PUBLIC_BASE_URL}/api/v1/agent/sessions/{session_id}",
+        },
+    }
+
+
+@app.post("/api/v1/agent/sessions/{session_id}/run")
+async def run_agent_session(
+    session_id: str,
+    request: AgentSessionRunRequest = AgentSessionRunRequest(),
+    db=Depends(get_db),
+) -> Dict[str, Any]:
+    config = _get_agent_session_config(db, session_id)
+    buyer_id = int(config["buyer_id"])
+    seller_id = int(config["seller_id"])
+    car_id = str(config["car_id"])
+    max_rounds = request.max_rounds or int(config.get("max_rounds") or 3)
+    auto_deal = config.get("auto_deal", False) if request.auto_deal is None else request.auto_deal
+    if request.buyer_target_price is not None:
+        config["buyer_target_price"] = request.buyer_target_price
+
+    car = db.query(CarMemory).filter(CarMemory.car_id == car_id).first()
+    if not car:
+        raise HTTPException(status_code=404, detail="车辆不存在")
+
+    bus = get_a2a_bus()
+    bus.set_db_session(db)
+
+    turns: List[Dict[str, Any]] = []
+    initial_message = config.get("initial_message") or (
+        f"我是买家 Agent，目标是{config.get('buyer_goal')}。"
+        f"请介绍 {car.brand}{car.model} 的车况、价格依据和可议价空间。"
+    )
+
+    inquiry_message = MessageBuilder.create_price_inquiry(
+        from_user_id=buyer_id,
+        to_user_id=seller_id,
+        car_id=car_id,
+        message=initial_message,
+    )
+    inquiry_message.session_id = session_id
+    inquiry_result = await bus.send(inquiry_message)
+    seller_content = _agent_response_content(inquiry_result)
+    turns.append({
+        "round": 0,
+        "type": "inquiry",
+        "from": "buyer",
+        "to": "seller",
+        "message": initial_message,
+        "result": inquiry_result,
+        "seller_response": seller_content,
+    })
+
+    _record_agent_event(
+        db,
+        actor_agent=config.get("buyer_agent_name", "Qclaw-buyer"),
+        actor_role="buyer",
+        event_type="auto_inquiry_sent",
+        status="succeeded" if inquiry_result.get("success") else "failed",
+        user_id=buyer_id,
+        related_user_id=seller_id,
+        related_car_id=car_id,
+        related_conversation_id=session_id,
+        input_snapshot={"message": initial_message},
+        output_snapshot={"seller_response": seller_content, "raw": inquiry_result},
+        observation="买家 Agent 已自动发起询价，卖家 Agent 已返回首轮说明。",
+    )
+
+    final_state = "in_progress"
+    agreed_price = None
+
+    for round_index in range(1, max_rounds + 1):
+        buyer_prompt = (
+            f"卖家上一轮回复：{seller_content}\n"
+            f"车辆挂牌价 {car.price} 万元。买家目标：{config.get('buyer_goal')}。"
+            "请作为买家 Agent 判断是否继续议价，并给出简短理由。"
+        )
+        buyer_message = MessageBuilder.create_message(
+            from_user_id=seller_id,
+            to_user_id=buyer_id,
+            content=buyer_prompt,
+        )
+        buyer_message.session_id = session_id
+        buyer_result = await bus.send(buyer_message)
+        buyer_content = _agent_response_content(buyer_result)
+
+        proposed_price = _calculate_offer_price(car, config, round_index)
+        negotiate_reason = (
+            f"第 {round_index} 轮自动议价。买家预算/目标："
+            f"{config.get('buyer_budget_min') or '未设'}-{config.get('buyer_budget_max') or '未设'} 万，"
+            f"买家 Agent 判断：{buyer_content[:240]}"
+        )
+        negotiate_message = MessageBuilder.create_price_negotiate(
+            from_user_id=buyer_id,
+            to_user_id=seller_id,
+            car_id=car_id,
+            current_price=float(car.price or 0),
+            proposed_price=proposed_price,
+            reason=negotiate_reason,
+        )
+        negotiate_message.session_id = session_id
+        negotiate_result = await bus.send(negotiate_message)
+        seller_content = _agent_response_content(negotiate_result)
+        deal_ready = _is_deal_ready(car, proposed_price, seller_content)
+
+        turn = {
+            "round": round_index,
+            "type": "negotiate",
+            "buyer_reflection": buyer_content,
+            "proposed_price": proposed_price,
+            "seller_response": seller_content,
+            "deal_ready": deal_ready,
+            "buyer_result": buyer_result,
+            "seller_result": negotiate_result,
+        }
+        turns.append(turn)
+
+        _record_agent_event(
+            db,
+            actor_agent="platform-orchestrator",
+            actor_role="platform",
+            event_type="auto_negotiation_round",
+            status="succeeded" if negotiate_result.get("success") else "failed",
+            user_id=buyer_id,
+            related_user_id=seller_id,
+            related_car_id=car_id,
+            related_conversation_id=session_id,
+            input_snapshot={
+                "round": round_index,
+                "proposed_price": proposed_price,
+                "buyer_reflection": buyer_content,
+            },
+            output_snapshot={
+                "seller_response": seller_content,
+                "deal_ready": deal_ready,
+            },
+            observation=(
+                f"自动协商第 {round_index} 轮完成，报价 {proposed_price} 万，"
+                f"{'已接近成交' if deal_ready else '继续观察'}。"
+            ),
+            score=1.0 if deal_ready else 0.6,
+        )
+
+        if deal_ready:
+            final_state = "deal_ready"
+            agreed_price = proposed_price
+            if auto_deal:
+                deal_message = MessageBuilder.create_deal_intent(
+                    from_user_id=buyer_id,
+                    to_user_id=seller_id,
+                    car_id=car_id,
+                    agreed_price=agreed_price,
+                    conditions={"next_step": "offline_verification"},
+                )
+                deal_message.session_id = session_id
+                deal_result = await bus.send(deal_message)
+                turn["deal_result"] = deal_result
+                final_state = "deal_intent_created"
+            break
+
+    if final_state == "in_progress":
+        final_state = "needs_human_review"
+
+    summary = {
+        "session_id": session_id,
+        "final_state": final_state,
+        "agreed_price": agreed_price,
+        "rounds": len([turn for turn in turns if turn["type"] == "negotiate"]),
+        "latest_seller_response": seller_content,
+        "next_step": (
+            "建议线下复核车况并确认见面"
+            if final_state in {"deal_ready", "deal_intent_created"}
+            else "建议补充车况档案或调整预算后继续"
+        ),
+    }
+
+    _record_agent_event(
+        db,
+        actor_agent="Hermes-lite",
+        actor_role="platform",
+        event_type="auto_session_completed",
+        status="succeeded",
+        user_id=buyer_id,
+        related_user_id=seller_id,
+        related_car_id=car_id,
+        related_conversation_id=session_id,
+        input_snapshot={"config": config},
+        output_snapshot={"summary": summary, "turns_count": len(turns)},
+        observation=f"自动协商会话结束：{summary['final_state']}，共 {summary['rounds']} 轮议价。",
+        score=1.0 if final_state in {"deal_ready", "deal_intent_created"} else 0.5,
+    )
+
+    growth_review = GrowthEngine(db).maybe_auto_review(interval=GROWTH_REVIEW_INTERVAL)
+
+    return {
+        "success": True,
+        "data": {
+            "summary": summary,
+            "turns": turns,
+            "growth_review": public_growth_review_result(growth_review),
+        },
+    }
+
+
+@app.get("/api/v1/agent/sessions/{session_id}")
+async def get_agent_session(
+    session_id: str,
+    db=Depends(get_db),
+) -> Dict[str, Any]:
+    config = _get_agent_session_config(db, session_id)
+    conversations = (
+        db.query(Conversation)
+        .filter(Conversation.session_id == session_id)
+        .order_by(Conversation.created_at.asc())
+        .all()
+    )
+    events = (
+        db.query(AgentEvent)
+        .filter(AgentEvent.related_conversation_id == session_id)
+        .order_by(AgentEvent.id.asc())
+        .all()
+    )
+    return {
+        "success": True,
+        "data": {
+            "session_id": session_id,
+            "config": config,
+            "conversations": [item.to_dict() for item in conversations],
+            "events": [item.to_dict() for item in events],
+        },
+    }
 
 
 @app.get("/api/v1/conversations/{user_id}")
