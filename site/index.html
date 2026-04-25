@@ -95,6 +95,22 @@
           </div>
         </section>
 
+        <section class="demo panel" id="auto-demo">
+          <div class="demo-copy">
+            <span class="status-label">Auto Negotiation Demo</span>
+            <h2>不用手动转发，平台自己跑一轮买卖双方 Agent 协商</h2>
+            <p>
+              点击按钮后，系统会在 CloudBase 后端创建测试买家、测试车商和一台测试车，
+              然后调用自动协商会话接口，让买家 Agent 与卖家 Agent 完成询价、判断、报价和回应。
+            </p>
+          </div>
+          <div class="demo-action">
+            <button class="button primary" id="run-demo" type="button">运行自动协商 Demo</button>
+            <p class="demo-hint">只生成测试数据，不涉及支付、托管、贷款或真实交易。</p>
+          </div>
+          <pre class="demo-output" id="demo-output">等待运行...</pre>
+        </section>
+
         <section class="footer-cta panel">
           <h2>现在怎么开始</h2>
           <p>
@@ -107,5 +123,114 @@
         </section>
       </main>
     </div>
+    <script>
+      const API_BASE = "https://used-car-a2a-vnext-249890-8-1407936127.sh.run.tcloudbase.com";
+      const output = document.getElementById("demo-output");
+      const button = document.getElementById("run-demo");
+
+      async function post(path, body) {
+        const response = await fetch(`${API_BASE}${path}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        const text = await response.text();
+        let data;
+        try {
+          data = JSON.parse(text);
+        } catch {
+          data = { raw: text };
+        }
+        if (!response.ok) {
+          throw new Error(`${path} ${response.status}: ${text}`);
+        }
+        return data;
+      }
+
+      function writeDemo(value) {
+        output.textContent = typeof value === "string" ? value : JSON.stringify(value, null, 2);
+      }
+
+      button.addEventListener("click", async () => {
+        button.disabled = true;
+        writeDemo("正在创建测试买家、车商、车源，并启动自动协商...");
+        const stamp = Date.now();
+
+        try {
+          const seller = await post("/api/v1/users", {
+            name: "网页Demo卖家",
+            email: `web_demo_seller_${stamp}@test.local`,
+            is_dealer: true,
+            seller_persona: {
+              city: "北京",
+              style: "透明专业",
+              negotiation_flexibility: "中等",
+            },
+          });
+          const sellerId = seller.data.id;
+
+          const car = await post(`/api/v1/cars?user_id=${sellerId}`, {
+            brand: "比亚迪",
+            model: "宋PLUS DM-i",
+            year: 2024,
+            price: 14.5,
+            target_price: 14.2,
+            mileage: 0.05,
+            city: "北京",
+            fuel_type: "插混",
+          });
+          const carId = car.data.car_id;
+
+          const buyer = await post("/api/v1/users", {
+            name: "网页Demo买家",
+            email: `web_demo_buyer_${stamp}@test.local`,
+            buyer_persona: {
+              preferred_brands: ["比亚迪", "丰田", "本田"],
+              budget_range: { min: 13, max: 15 },
+              negotiation_style: "理性",
+            },
+          });
+          const buyerId = buyer.data.id;
+
+          const session = await post("/api/v1/agent/sessions", {
+            buyer_id: buyerId,
+            seller_id: sellerId,
+            car_id: carId,
+            buyer_goal: "北京家用插混SUV，预算13到15万，要求车况透明并有合理议价空间",
+            buyer_budget_min: 13,
+            buyer_budget_max: 15,
+            buyer_target_price: 14.1,
+            max_rounds: 2,
+            auto_deal: false,
+          });
+          const sessionId = session.data.session_id;
+
+          const run = await post(`/api/v1/agent/sessions/${sessionId}/run`, {
+            max_rounds: 2,
+          });
+          const summary = run.data.summary;
+          const turns = run.data.turns.map((turn) => ({
+            round: turn.round,
+            type: turn.type,
+            proposed_price: turn.proposed_price || null,
+            deal_ready: Boolean(turn.deal_ready),
+            seller_response: (turn.seller_response || "").slice(0, 140),
+          }));
+
+          writeDemo({
+            session_id: sessionId,
+            final_state: summary.final_state,
+            agreed_price: summary.agreed_price,
+            rounds: summary.rounds,
+            next_step: summary.next_step,
+            turns,
+          });
+        } catch (error) {
+          writeDemo(`运行失败：${error.message}`);
+        } finally {
+          button.disabled = false;
+        }
+      });
+    </script>
   </body>
 </html>

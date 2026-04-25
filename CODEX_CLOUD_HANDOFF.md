@@ -29,7 +29,7 @@
 - CloudBase 服务名：`used-car-a2a-vnext`
 - CloudBase 环境：`car-assistant-prod-3dqle77ef680c`
 - 最新线上版本：`used-car-a2a-vnext-012`
-- 最新 Git 提交：`1fe2ce4 feat: add automated agent negotiation sessions`
+- 最新 Git 提交：以 GitHub `main` 分支为准；本文件会随提交更新。
 
 ## 本轮新增能力
 
@@ -101,13 +101,85 @@ scripts/ensure_latest.sh
 4. 可以修改代码、文档、测试，并推送 GitHub。
 5. CloudBase 真实部署优先留给本地已登录 CLI 执行，除非云端已经配置好腾讯云密钥。
 
+## CloudBase 数据库状态
+
+2026-04-25 已通过 CLI 验证：
+
+```bash
+tcb db instance list -e car-assistant-prod-3dqle77ef680c --json
+```
+
+返回：
+
+```json
+{"data":[],"meta":{"total":0}}
+```
+
+也就是说当前 CloudBase 环境还没有 MySQL 实例。
+
+继续执行：
+
+```bash
+tcb db execute -e car-assistant-prod-3dqle77ef680c --sql 'SHOW DATABASES' --read-only --json
+```
+
+返回 `ResourceNotFound.InstanceNotFound`。因此生产数据库持久化不是代码已经接不上，而是云资源还没有开通 SQL 实例。
+
+CLI 当前提供 `db instance list/config/restart` 和 `db execute`，未发现可直接创建 MySQL 实例的命令。下一步需要先在 CloudBase 控制台开通 SQL 型数据库 / MySQL 实例，然后再配置 `DATABASE_URL`。
+
+## 回归测试状态
+
+已新增 `scripts/smoke_test.py`，覆盖：
+
+- `/health`
+- `/`
+- 创建买家
+- 创建卖家
+- 上架车辆
+- 发布需求
+- 查询匹配
+- 创建自动协商会话
+- 运行自动协商会话
+- 查看会话 conversations/events
+- 确认 OpenAPI 暴露 `/api/v1/agent/sessions`
+
+GitHub Actions 已改为运行：
+
+```bash
+python scripts/smoke_test.py
+```
+
+本地已用 mock 模型跑通：
+
+```bash
+AI_MODEL=mock AI_API_KEY=sk-test-mock python3 scripts/smoke_test.py
+```
+
+## 前端 Demo 状态
+
+Vercel 首页已增加“自动协商 Demo”入口。
+
+入口位置：
+
+```text
+https://used-car-a2a-vnext.vercel.app/#auto-demo
+```
+
+点击按钮后会调用 CloudBase 后端：
+
+1. 创建测试卖家
+2. 创建测试车源
+3. 创建测试买家
+4. 创建自动协商会话
+5. 运行自动协商会话
+6. 在页面输出 `session_id`、`final_state`、`agreed_price` 和每轮摘要
+
 ## 下一步优先级
 
-1. 把生产数据库从容器内 SQLite 换成 CloudBase SQL/MySQL，避免重新部署后测试数据丢失。
-2. 给自动协商接口补 API 回归测试。
-3. 给前端首页增加“自动协商 Demo”入口，让人类可以点按钮跑一轮。
-4. 增强 Hermes-lite，对 Qclaw / WorkBuddy 测试过程做更清晰的复盘摘要。
-5. 将长期核心算法未来迁到腾讯云私有服务，公开仓库只保留 Skill、OpenAPI、SDK 和外壳。
+1. 在 CloudBase 控制台开通 SQL 型数据库 / MySQL 实例。
+2. 配置 `DATABASE_URL` 到 CloudBase 服务环境变量，并重新部署。
+3. 增强 Hermes-lite，对 Qclaw / WorkBuddy 测试过程做更清晰的复盘摘要。
+4. 将长期核心算法未来迁到腾讯云私有服务，公开仓库只保留 Skill、OpenAPI、SDK 和外壳。
 
 ## 给 Qclaw / WorkBuddy 的测试入口
 
@@ -125,6 +197,7 @@ GET /api/v1/agent/sessions/{session_id}
 
 ## 当前仍需注意的问题
 
+- CloudBase 免费/低成本实例可能冷启动，首次公网请求可能出现约 30 秒 503；随后 `/health` 可恢复 200。
 - 线上仍使用容器内 SQLite，重部署会重置测试数据。
 - `evaluate_car` 工具仍是 mock 估价，需要后续接真实数据源或更稳健的规则。
 - 自动协商目前是 MVP 调度器，不是最终交易系统；它只形成“见面/复核/沟通意向”，不能表达支付、托管、贷款或金融推荐。
