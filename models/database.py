@@ -1,6 +1,8 @@
 """
 数据库配置模块
-支持 SQLite 本地开发，预留 PostgreSQL + pgvector 接口
+支持 SQLite 本地开发，预留 PostgreSQL + pgvector 接口。
+
+默认走 SQLite-first，方便在 CloudBase 免费/个人版上先跑通 MVP。
 """
 
 import os
@@ -9,12 +11,14 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 
 # 数据库路径配置
-DB_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data")
+PROJECT_ROOT = os.path.dirname(os.path.dirname(__file__))
+DB_PATH = os.getenv("DB_DIR", os.path.join(PROJECT_ROOT, "data"))
+SQLITE_FILENAME = os.getenv("SQLITE_FILENAME", "c2c_platform.db")
 os.makedirs(DB_PATH, exist_ok=True)
 
 DATABASE_URL = os.getenv(
     "DATABASE_URL", 
-    f"sqlite:///{os.path.join(DB_PATH, 'c2c_platform.db')}"
+    f"sqlite:///{os.path.join(DB_PATH, SQLITE_FILENAME)}"
 )
 
 # PostgreSQL 生产环境配置示例（预留接口）

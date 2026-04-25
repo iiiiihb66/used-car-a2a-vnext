@@ -32,13 +32,29 @@ uvicorn app:app --reload
 
 复制 `.env.example` 为 `.env` 后填写:
 
-- `DATABASE_URL`
+- `DATABASE_URL`（可留空，默认 SQLite）
+- `DB_DIR`（可选，指定 SQLite 落盘目录）
+- `SQLITE_FILENAME`（可选）
 - `AI_API_KEY`
 - `AI_BASE_URL`
 - `AI_MODEL`
 - `ADMIN_TOKEN`
 - `CORS_ORIGINS`
 - `GROWTH_REVIEW_INTERVAL`
+
+## 免费版部署建议
+
+当前仓库默认就是 `SQLite-first`，更适合 CloudBase 免费/个人版 MVP：
+
+1. 不开 CloudBase SQL / MySQL，不触发私有网络需求。
+2. `DATABASE_URL` 留空，直接使用 SQLite。
+3. 云托管实例数先限制为 `1`，避免多实例同时写同一个本地库。
+4. 定期执行 `python scripts/backup_sqlite.py` 导出快照。
+
+说明：
+
+- 当前最稳的免费路径是“云托管 + SQLite + 备份”。
+- 如果未来要做真正多实例和稳定持久化，再迁移到外部数据库或 CloudBase 文档型数据库 HTTP API。
 
 ## CloudBase 部署
 

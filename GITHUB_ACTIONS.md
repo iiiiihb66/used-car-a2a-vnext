@@ -51,7 +51,8 @@ tcb cloudrun deploy -e "$TCB_ENV_ID" -s "$TCB_SERVICE_NAME" --source . --port 80
 | `AI_API_KEY` | CloudBase AI / 混元 API Key |
 | `AI_BASE_URL` | `https://car-assistant-prod-3dqle77ef680c.api.tcloudbasegateway.com/v1/ai/hunyuan/v1` |
 | `AI_MODEL` | `hunyuan-turbos-latest` |
-| `DATABASE_URL` | CloudBase SQL / MySQL 连接串 |
+| `DATABASE_URL` | 可留空；留空时默认使用 SQLite |
+| `DB_DIR` | 可选；指定 SQLite 落盘目录 |
 | `ADMIN_TOKEN` | 管理员令牌 |
 | `CORS_ORIGINS` | `https://used-car-a2a-vnext.vercel.app` |
 

@@ -1,6 +1,6 @@
 # Codex Cloud Handoff
 
-更新时间：2026-04-25
+更新时间：2026-04-26
 
 ## 当前结论
 
@@ -125,7 +125,15 @@ tcb db execute -e car-assistant-prod-3dqle77ef680c --sql 'SHOW DATABASES' --read
 
 返回 `ResourceNotFound.InstanceNotFound`。因此生产数据库持久化不是代码已经接不上，而是云资源还没有开通 SQL 实例。
 
-CLI 当前提供 `db instance list/config/restart` 和 `db execute`，未发现可直接创建 MySQL 实例的命令。下一步需要先在 CloudBase 控制台开通 SQL 型数据库 / MySQL 实例，然后再配置 `DATABASE_URL`。
+CLI 当前提供 `db instance list/config/restart` 和 `db execute`，未发现可直接创建 MySQL 实例的命令。
+
+2026-04-26 策略更新：
+
+- 不走 CloudBase SQL / MySQL。
+- 不做需要私有网络的方案。
+- 当前主路径改为 CloudBase 云托管继续跑后端，数据库保持 SQLite-first。
+- 为避免重部署丢数，仓库已补充 `scripts/backup_sqlite.py`，可定期导出快照。
+- 后续如果要继续留在免费/个人版，再评估把核心业务数据迁到 CloudBase 文档型数据库 HTTP API。
 
 ## 回归测试状态
 
@@ -176,10 +184,10 @@ https://used-car-a2a-vnext.vercel.app/#auto-demo
 
 ## 下一步优先级
 
-1. 在 CloudBase 控制台开通 SQL 型数据库 / MySQL 实例。
-2. 配置 `DATABASE_URL` 到 CloudBase 服务环境变量，并重新部署。
+1. 保持 `DATABASE_URL` 留空，用 SQLite 跑通免费版 MVP。
+2. 在单实例前提下补齐 SQLite 备份节奏，避免重部署丢测试数据。
 3. 增强 Hermes-lite，对 Qclaw / WorkBuddy 测试过程做更清晰的复盘摘要。
-4. 将长期核心算法未来迁到腾讯云私有服务，公开仓库只保留 Skill、OpenAPI、SDK 和外壳。
+4. 后续再评估把核心实体迁到 CloudBase 文档型数据库 HTTP API。
 
 ## 给 Qclaw / WorkBuddy 的测试入口
 
@@ -199,6 +207,7 @@ GET /api/v1/agent/sessions/{session_id}
 
 - CloudBase 免费/低成本实例可能冷启动，首次公网请求可能出现约 30 秒 503；随后 `/health` 可恢复 200。
 - 线上仍使用容器内 SQLite，重部署会重置测试数据。
+- 免费/个人版下不要再把 MySQL + 私有网络当成默认下一步，否则会直接碰到套餐升级。
 - `evaluate_car` 工具仍是 mock 估价，需要后续接真实数据源或更稳健的规则。
 - 自动协商目前是 MVP 调度器，不是最终交易系统；它只形成“见面/复核/沟通意向”，不能表达支付、托管、贷款或金融推荐。
 - 公开仓库适合早期测试。商业化前必须拆分 public shell 和 private Tencent Cloud core。

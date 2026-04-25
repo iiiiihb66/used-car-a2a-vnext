@@ -20,9 +20,11 @@ npm install -g @cloudbase/cli@latest
 tcb login
 ```
 
-## 必填环境变量
+## 环境变量
 
-- `DATABASE_URL`
+- `DATABASE_URL`（可选，不填则默认 SQLite）
+- `DB_DIR`（可选，指定 SQLite 数据目录）
+- `SQLITE_FILENAME`（可选）
 - `AI_API_KEY`
 - `AI_BASE_URL`
 - `AI_MODEL`
@@ -58,6 +60,17 @@ tcb cloudrun deploy -e <ENV_ID> -s <SERVICE_NAME> --source .
 
 - `used-car-a2a-vnext`
 
+## 免费 / 个人版 MVP 推荐路径
+
+如果目标是不升级套餐，建议这样配：
+
+1. 不开 CloudBase SQL / MySQL。
+2. 不配置 `DATABASE_URL`，让服务继续使用 SQLite。
+3. 将实例数控制在 `1`，先按单实例 MVP 运行。
+4. 用 `python scripts/backup_sqlite.py` 定期导出数据库快照。
+
+这条路径的优点是改动最小、成本最低，适合先验证产品闭环。
+
 ## GitHub Actions 自动部署
 
 仓库已提供手动触发的工作流:
@@ -86,4 +99,5 @@ tcb cloudrun deploy -e <ENV_ID> -s <SERVICE_NAME> --source .
 ## 注意
 
 - 当前版本是工具型后端，不包含支付、托管、贷款与金融能力。
-- 若使用 CloudBase SQL，请确保数据库白名单允许云托管访问。
+- 若未来启用 CloudBase SQL / MySQL，请先确认套餐、私有网络与实例成本。
+- 不建议在多实例场景下继续依赖单个 SQLite 文件作为在线主库。
