@@ -62,6 +62,8 @@ uvicorn app:app --reload
 
 SQLite 备份和恢复见 [SQLITE_OPERATIONS.md](/Users/fuhongbo/Documents/Antigravity/项目对比/used-car-a2a-vnext/SQLITE_OPERATIONS.md)
 
+Qclaw / WorkBuddy MVP 测试提示词见 [MVP_AGENT_TEST_PROMPTS.md](/Users/fuhongbo/Documents/Antigravity/项目对比/used-car-a2a-vnext/MVP_AGENT_TEST_PROMPTS.md)
+
 ## 产品进化路线
 
 见 [PRODUCT_EVOLUTION.md](/Users/fuhongbo/Documents/Antigravity/项目对比/used-car-a2a-vnext/PRODUCT_EVOLUTION.md)

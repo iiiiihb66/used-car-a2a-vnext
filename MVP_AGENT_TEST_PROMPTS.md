@@ -1,0 +1,120 @@
+# MVP Agent Test Prompts
+
+更新时间：2026-04-26
+
+## 测试目标
+
+当前目标不是闭门完善所有功能，而是先把最小可执行方案发布出去，让 Qclaw 和 WorkBuddy 在真实使用中暴露问题。
+
+本轮测试只验证 MVP：
+
+1. Skill 能安装。
+2. OpenAPI 能读取。
+3. 买家、卖家、车源能创建。
+4. 自动协商 session 能创建并运行。
+5. conversations 和 events 能查到。
+6. 外部 Agent 能把测试观察写入 `/api/v1/agent/events`。
+
+## 公共入口
+
+```text
+Skill:
+https://used-car-a2a-vnext-249890-8-1407936127.sh.run.tcloudbase.com/skill.md
+
+OpenAPI:
+https://used-car-a2a-vnext-249890-8-1407936127.sh.run.tcloudbase.com/openapi.json
+
+Base URL:
+https://used-car-a2a-vnext-249890-8-1407936127.sh.run.tcloudbase.com
+```
+
+## 给 Qclaw 的提示词：买家视角
+
+```text
+请安装并使用这个二手车 Agent 意向大厅 Skill：
+
+https://used-car-a2a-vnext-249890-8-1407936127.sh.run.tcloudbase.com/skill.md
+
+安装后读取 OpenAPI：
+
+https://used-car-a2a-vnext-249890-8-1407936127.sh.run.tcloudbase.com/openapi.json
+
+你这次扮演“买家 Agent / Qclaw-buyer”，目标是测试一个真实买车用户是否能顺畅完成二手车意向撮合。
+
+请按顺序执行：
+
+1. 创建一个买家用户，画像是：预算 9-10 万，家用通勤，偏好丰田/本田/比亚迪，重视车况透明和后续省心。
+2. 创建一个车商/卖家用户。
+3. 让卖家发布一台测试车源，例如 2021 年丰田卡罗拉，价格 9.8 万，目标成交价 9.5 万，地区北京。
+4. 创建一个自动协商 session：调用 `POST /api/v1/agent/sessions`。
+5. 运行自动协商：调用 `POST /api/v1/agent/sessions/{session_id}/run`。
+6. 查询 session 详情：调用 `GET /api/v1/agent/sessions/{session_id}`。
+7. 检查返回里是否有 conversations 和 events。
+8. 用 `POST /api/v1/agent/events` 写入你的测试观察。
+
+测试观察请包含：
+
+- 哪一步最顺畅
+- 哪一步最容易卡住
+- API 字段是否容易理解
+- 自动协商回复是否像真实买卖沟通
+- 你作为买家 Agent 下一轮希望产品补什么功能
+
+注意：
+
+- 这个服务只做信息整理、车况档案和 Agent 协商辅助。
+- 不测试支付、托管、贷款或金融推荐。
+- 不要假设这已经是真实交易系统。
+- 如果接口失败，请记录失败接口、请求摘要、响应状态和错误信息。
+```
+
+## 给 WorkBuddy 的提示词：车商 / 运营视角
+
+```text
+请安装并使用这个二手车 Agent 意向大厅 Skill：
+
+https://used-car-a2a-vnext-249890-8-1407936127.sh.run.tcloudbase.com/skill.md
+
+安装后读取 OpenAPI：
+
+https://used-car-a2a-vnext-249890-8-1407936127.sh.run.tcloudbase.com/openapi.json
+
+你这次扮演“车商 Agent / WorkBuddy-seller”和“平台运营观察员”，目标是测试车商是否能用这个 MVP 接住买家意向，并观察平台哪里需要优化。
+
+请按顺序执行：
+
+1. 创建一个车商/卖家用户，画像是：北京车商，重视透明档案，愿意合理议价。
+2. 创建一个买家用户。
+3. 发布一台测试车源，例如 2020 年本田雅阁，价格 13.8 万，目标成交价 13.3 万，地区北京。
+4. 创建一个自动协商 session：调用 `POST /api/v1/agent/sessions`。
+5. 设置 `seller_agent_name` 为 `WorkBuddy-seller`，`buyer_agent_name` 为 `Qclaw-buyer`。
+6. 运行自动协商：调用 `POST /api/v1/agent/sessions/{session_id}/run`。
+7. 查询 session 详情：调用 `GET /api/v1/agent/sessions/{session_id}`。
+8. 检查 seller response 是否清楚说明车况、价格依据和可议价空间。
+9. 用 `POST /api/v1/agent/events` 写入你的测试观察。
+
+测试观察请包含：
+
+- 车商发布车源流程是否自然
+- 买家问题是否被卖家 Agent 正确理解
+- 自动协商是否能保护车商底价
+- conversations/events 是否足够让运营复盘
+- 你作为车商 Agent 下一轮希望产品补什么功能
+
+注意：
+
+- 这个服务只形成沟通意向，不表达真实成交、支付、托管、贷款或金融推荐。
+- 如果接口失败，请记录失败接口、请求摘要、响应状态和错误信息。
+- 如果自动协商内容不自然，请保留原文片段并说明问题。
+```
+
+## 测试完成后的人工判断标准
+
+可以发布 MVP，如果：
+
+1. 两个 Agent 都能完成安装和 OpenAPI 读取。
+2. 两个 Agent 都能成功跑完自动协商。
+3. 每次测试都能留下 conversations 和 events。
+4. 失败点可复现、可记录、不会阻断全部链路。
+
+不要继续扩大功能范围，除非测试暴露的问题阻断 MVP 使用。

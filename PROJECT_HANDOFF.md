@@ -13,6 +13,7 @@
 3. `README.md`
 4. `DEPLOY_CLOUDBASE.md`
 5. `SQLITE_OPERATIONS.md`
+6. `MVP_AGENT_TEST_PROMPTS.md`
 
 ## 项目目标
 
@@ -98,9 +99,9 @@ used-car-a2a-vnext
 
 ## 下一步优先级
 
-1. 先把 SQLite 备份流程接进实际部署操作。
-2. 跑一次线上完整业务闭环：创建卖家、上架车、创建买家、自动协商、查看 events。
-3. 确认 Vercel Demo 页面可稳定触发自动协商。
+1. 把 `MVP_AGENT_TEST_PROMPTS.md` 里的两套提示词分别发给 Qclaw 和 WorkBuddy。
+2. 收集两个 Agent 写入的 `/api/v1/agent/events`。
+3. 根据真实测试卡点修最小阻塞问题。
 4. 增强 Hermes-lite，让它总结 Qclaw / WorkBuddy 测试中的卡点和下一轮提示词。
 5. 只有在免费方案仍能满足时，才评估 CloudBase 文档型数据库 HTTP API。
 
@@ -118,6 +119,7 @@ used-car-a2a-vnext
 - README.md
 - DEPLOY_CLOUDBASE.md
 - SQLITE_OPERATIONS.md
+- MVP_AGENT_TEST_PROMPTS.md
 
 关键决策：
 - 不升级 CloudBase 套餐
