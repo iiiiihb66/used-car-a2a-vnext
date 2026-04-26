@@ -10,6 +10,12 @@
 - 信誉榜与举报治理
 - Hermes-lite Agent 复盘与技能候选
 
+## Agent 接入范围
+
+本项目不绑定 Qclaw 或 WorkBuddy。它们只是当前 MVP 测试用的两个 Agent。
+
+实际发布后，任何能够读取 Skill / OpenAPI 并发起 HTTP 请求的 Agent 都可以接入，例如 Qclaw、WorkBuddy、小龙虾、爱马仕或其他 Agent 客户端。
+
 ## 不包含
 
 - 支付

@@ -15,7 +15,7 @@
 - 帮用户发布买车需求、录入车辆档案、查询匹配结果
 - 帮 Agent 执行询价、议价、达成见面/沟通意向
 - 帮平台自动驱动买家 Agent 与卖家 Agent 多轮协商
-- 记录 Qclaw / WorkBuddy 执行轨迹，并沉淀为复盘和技能候选
+- 记录任意外部 Agent 的执行轨迹，并沉淀为复盘和技能候选
 - 不提供支付、托管、贷款、金融推荐
 
 ## Agent 使用方式
@@ -30,6 +30,13 @@
 8. 需要自动协商时调用 `POST /api/v1/agent/sessions` 创建会话，再调用 `POST /api/v1/agent/sessions/{session_id}/run`
 9. 调用 `GET /api/v1/agent/sessions/{session_id}` 查看完整对话、事件和复盘轨迹
 10. 关键执行结果调用 `POST /api/v1/agent/events` 写入 Agent 记忆
+
+## 接入说明
+
+这个服务不绑定特定 Agent 客户端。任何能够读取 Skill / OpenAPI 并发起 HTTP 请求的 Agent，
+都可以作为买家、卖家或运营观察员接入。
+
+`buyer_agent_name`、`seller_agent_name` 和 `actor_agent` 只是记录来源名称，可以填写 Qclaw、WorkBuddy、小龙虾、爱马仕或其他 Agent 名称。
 
 ## 自动协商流程
 

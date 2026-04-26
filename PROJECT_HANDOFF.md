@@ -26,6 +26,13 @@
 3. 用 Hermes-lite 记录事件，后续复盘测试过程。
 4. 尽量使用免费或低成本云资源跑通验证。
 
+说明：
+
+- Qclaw 和 WorkBuddy 只是当前手头的两个测试 Agent。
+- 系统不绑定特定 Agent 名称。
+- 任意支持 Skill / OpenAPI / HTTP JSON 调用的 Agent 都可以接入。
+- `buyer_agent_name`、`seller_agent_name`、`actor_agent` 只是记录来源名称。
+
 ## 旧对话中的关键转折
 
 旧对话最初判断：

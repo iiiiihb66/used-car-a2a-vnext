@@ -6,6 +6,9 @@
 
 当前目标不是闭门完善所有功能，而是先把最小可执行方案发布出去，让 Qclaw 和 WorkBuddy 在真实使用中暴露问题。
 
+Qclaw 和 WorkBuddy 只是当前手头的两个测试工具，不是系统边界。
+实际发布后，任何能读取 Skill / OpenAPI 并调用 HTTP API 的 Agent 都可以接入。
+
 本轮测试只验证 MVP：
 
 1. Skill 能安装。
@@ -14,6 +17,20 @@
 4. 自动协商 session 能创建并运行。
 5. conversations 和 events 能查到。
 6. 外部 Agent 能把测试观察写入 `/api/v1/agent/events`。
+
+## 通用接入能力
+
+这个服务不绑定具体 Agent 名称。
+
+任意 Agent 只要具备以下能力，就可以接入：
+
+1. 读取 Skill 文档。
+2. 读取 OpenAPI。
+3. 发起 HTTP GET / POST 请求。
+4. 处理 JSON 响应。
+5. 按需调用 `/api/v1/agent/events` 写入测试观察。
+
+`buyer_agent_name`、`seller_agent_name` 和 `actor_agent` 只是记录来源名称，可以填写 Qclaw、WorkBuddy、小龙虾、爱马仕或其他 Agent 名称。
 
 ## 公共入口
 
@@ -28,7 +45,7 @@ Base URL:
 https://used-car-a2a-vnext-249890-8-1407936127.sh.run.tcloudbase.com
 ```
 
-## 给 Qclaw 的提示词：买家视角
+## 给 Qclaw 的提示词：买家视角测试样例
 
 ```text
 请安装并使用这个二手车 Agent 意向大厅 Skill：
@@ -68,7 +85,7 @@ https://used-car-a2a-vnext-249890-8-1407936127.sh.run.tcloudbase.com/openapi.jso
 - 如果接口失败，请记录失败接口、请求摘要、响应状态和错误信息。
 ```
 
-## 给 WorkBuddy 的提示词：车商 / 运营视角
+## 给 WorkBuddy 的提示词：车商 / 运营视角测试样例
 
 ```text
 请安装并使用这个二手车 Agent 意向大厅 Skill：
@@ -118,3 +135,40 @@ https://used-car-a2a-vnext-249890-8-1407936127.sh.run.tcloudbase.com/openapi.jso
 4. 失败点可复现、可记录、不会阻断全部链路。
 
 不要继续扩大功能范围，除非测试暴露的问题阻断 MVP 使用。
+
+## 给其他 Agent 的通用提示词
+
+```text
+请安装并使用这个二手车 Agent 意向大厅 Skill：
+
+https://used-car-a2a-vnext-249890-8-1407936127.sh.run.tcloudbase.com/skill.md
+
+安装后读取 OpenAPI：
+
+https://used-car-a2a-vnext-249890-8-1407936127.sh.run.tcloudbase.com/openapi.json
+
+你这次作为外部测试 Agent 接入。你的 Agent 名称是：[填写你的名称]。
+
+请完成一次 MVP 测试：
+
+1. 创建买家用户。
+2. 创建卖家用户。
+3. 发布一台测试车源。
+4. 创建自动协商 session，并把 `buyer_agent_name` 或 `seller_agent_name` 设置为你的 Agent 名称。
+5. 运行自动协商。
+6. 查询 session 详情。
+7. 检查 conversations 和 events。
+8. 调用 `POST /api/v1/agent/events` 写入你的测试观察，`actor_agent` 填你的 Agent 名称。
+
+请明确记录：
+
+- 你是哪一个 Agent
+- 你扮演买家、卖家还是运营观察员
+- 哪个接口最好用
+- 哪个接口最容易出错
+- 自动协商回复是否自然
+- 下一轮最应该修什么
+
+注意：
+这个服务只做信息整理、车况档案和 Agent 协商辅助，不做支付、托管、贷款或金融推荐。
+```
