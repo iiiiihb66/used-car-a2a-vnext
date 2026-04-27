@@ -214,23 +214,43 @@ def _calculate_offer_price(car: CarMemory, config: Dict[str, Any], round_index: 
         car.brand, car.model, car.year, car.mileage
     )
     market_avg = market_ref["market_avg"]
-    
     display_price = float(car.price or 0)
+    
+    # 锚点：取挂牌价和评估价的较小值
+    anchor_price = min(display_price, market_avg)
+    
+    # 溢价系数：挂牌价相对于市场均价的溢价程度
+    premium_ratio = display_price / market_avg if market_avg > 0 else 1.0
+    
+    # 初始折扣
+    if premium_ratio > 1.1:
+        initial_discount = 0.90
+    elif premium_ratio < 0.95:
+        initial_discount = 0.97
+    else:
+        initial_discount = 0.93
+
     target_price = config.get("buyer_target_price")
     budget_max = config.get("buyer_budget_max")
 
-    # 初始报价：参考评估价和展示价，取较低的一个并打折
-    base_anchor = min(display_price, market_avg)
     if target_price:
         base_offer = float(target_price)
-    elif budget_max:
-        base_offer = min(float(budget_max), base_anchor * 0.94)
     else:
-        base_offer = base_anchor * 0.94
+        base_offer = anchor_price * initial_discount
+        if budget_max:
+            base_offer = min(base_offer, float(budget_max))
 
-    # 每轮动态递增，博弈空间根据展示价与评估价的差距决定
-    increment_factor = 0.015 if display_price > market_avg else 0.01
-    offer = base_offer + max(round_index - 1, 0) * display_price * increment_factor
+    # 动态步长 (每轮步长递减，表现出博弈诚意)
+    step_factor = 0.015 if display_price > market_avg else 0.01
+    
+    if round_index <= 1:
+        offer = base_offer
+    else:
+        # 非线性累加：round 2 +1.5%, round 3 +0.75%, round 4 +0.37%...
+        total_increment = 0
+        for i in range(1, round_index):
+            total_increment += display_price * step_factor * (0.5 ** (i - 1))
+        offer = base_offer + total_increment
     
     if budget_max:
         offer = min(offer, float(budget_max))
@@ -239,10 +259,12 @@ def _calculate_offer_price(car: CarMemory, config: Dict[str, Any], round_index: 
 
 def _is_deal_ready(car: CarMemory, proposed_price: float, seller_content: str) -> bool:
     target_price = float(car.target_price or car.price or 0)
+    # 价格达成一致：出价达到目标价的 98% 以上
     accepted_by_price = bool(target_price and proposed_price >= target_price * 0.98)
+    # 语义判断：卖家表达了接受意向
     accepted_by_text = any(
         keyword in seller_content
-        for keyword in ["可以接受", "同意成交", "成交", "接受这个价格", "价格可以"]
+        for keyword in ["可以接受", "同意成交", "成交", "接受这个价格", "价格可以", "没问题", "确定"]
     )
     return accepted_by_price or accepted_by_text
 
@@ -1057,7 +1079,10 @@ async def run_agent_session(
 
         if deal_ready:
             # 增加一个主动确认环节
-            confirm_prompt = f"买家 Agent 出价 {proposed_price} 万。卖家 Agent 已表示可以考虑。请问您确定按照此方案成交吗？"
+            confirm_prompt = (
+                f"买家 Agent 出价 {proposed_price} 万。卖家 Agent 已表示可以考虑。\n"
+                "请作为买家 Agent 最终确认：是否确认按照此方案成交？如果确认，请回复“我确认接受此方案”。"
+            )
             confirm_message = MessageBuilder.create_message(
                 from_user_id=seller_id,
                 to_user_id=buyer_id,
@@ -1067,10 +1092,19 @@ async def run_agent_session(
             confirm_result = await bus.send(confirm_message)
             confirm_content = _agent_response_content(confirm_result)
             
-            turn["confirmation"] = confirm_content
+            # 判断买家是否最终确认
+            buyer_confirmed = "确认接受" in confirm_content or "没问题" in confirm_content
             
-            final_state = "deal_ready"
-            agreed_price = proposed_price
+            turn["confirmation"] = confirm_content
+            turn["buyer_confirmed"] = buyer_confirmed
+            
+            if buyer_confirmed:
+                final_state = "deal_ready"
+                agreed_price = proposed_price
+            else:
+                # 如果买家反悔或需要进一步确认，继续对话（但通常在 deal_ready 后不会反悔，这里作为保护逻辑）
+                final_state = "in_progress"
+                observation = "买家在最后确认环节表示犹豫，未达成最终一致。"
             if auto_deal:
                 deal_message = MessageBuilder.create_deal_intent(
                     from_user_id=buyer_id,

@@ -103,3 +103,11 @@ class QclawBuyer(UserAgent):
         final_offer = min(offer, display_price)
         
         return round(final_offer, 2)
+
+    def match_brands(self, brands: List[str], inventory: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """批量品牌匹配"""
+        return [car for car in inventory if car.get("brand") in brands]
+
+    def get_confirmation_message(self, price: float) -> str:
+        """成交意向后的主动确认流程"""
+        return f"我已确认接受 {price} 万元的方案，请问您那边也确定吗？如果没问题我们就达成意向了。"

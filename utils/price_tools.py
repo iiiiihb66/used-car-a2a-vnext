@@ -70,11 +70,24 @@ class PriceEvaluator:
         elif diff_percent < -5:
             status = "偏低"
             
+        # 增加价格依据描述
+        justification = []
+        if market_ref['age'] < 3:
+            justification.append("准新车龄，保值率较高")
+        elif market_ref['age'] > 8:
+            justification.append("车龄偏老，残值较低")
+            
+        if market_ref['mileage'] < market_ref['age'] * 1.0:
+            justification.append("年均里程极低，车况磨损小")
+        elif market_ref['mileage'] > market_ref['age'] * 2.5:
+            justification.append("年均里程偏高，机械磨损较大")
+
         return {
             "status": status,
             "diff_amount": round(diff, 2),
             "diff_percent": round(diff_percent, 1),
-            "is_competitive": diff_percent <= 0
+            "is_competitive": diff_percent <= 0,
+            "justification": "；".join(justification) if justification else "车况符合平均市场表现"
         }
 
 class ConditionTemplate:
@@ -85,8 +98,12 @@ class ConditionTemplate:
         """获取结构化车况描述"""
         return f"""
 【基本信息】{car_info.get('year')}年 {car_info.get('brand')} {car_info.get('model')}，行驶 {car_info.get('mileage')} 万公里。
-【外观内饰】内饰整洁，仅主驾驶座椅有轻微磨损。外观原漆比例高，仅右前叶子板有喷漆修复。
-【机械状况】发动机运行平稳，变速箱换挡顺滑，空调给力。
-【历史记录】全程 4S 店保养，保养手册齐全，无事故记录，无泡水，无火烧。
-【轮胎磨损】四条轮胎磨损约 30%，预计还能行驶 3-4 万公里。
+
+【外观细节】外观原漆比例约 85%，漆面亮度良好。仅前保险杠和右前叶子板有喷漆修复，无明显钣金，全车玻璃为原厂件。
+【内饰状况】内饰整洁无异味。中控按键阻尼感正常，真皮座椅有自然使用褶皱，顶棚无塌陷，地毯干爽无受潮痕迹。
+    - 磨损点：主驾驶座椅侧翼有轻微进出磨损。
+【机械素质】发动机启动顺畅，怠速静谧。变速箱在 2-3 挡切换时表现顺滑，底盘紧凑无异响，避震器无渗油。
+    - 消耗品：刹车片厚度约 6mm，轮胎花纹剩余 60%。
+【历史记录】记录显示全程在官方 4S 店按时保养，最近一次大保养在半年前。
+    - 档案核验：无事故、无火烧、无水泡，链式存证记录完整。
         """.strip()

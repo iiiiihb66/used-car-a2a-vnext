@@ -187,9 +187,13 @@ def create_match_cars_tool() -> MCPTool:
                 CarMemory.price <= budget_max
             )
             
-            # 品牌筛选
+            # 品牌筛选 (支持批量匹配)
             if brand:
-                query = query.filter(CarMemory.brand == brand)
+                brands = [b.strip() for b in brand.split(",") if b.strip()]
+                if len(brands) > 1:
+                    query = query.filter(CarMemory.brand.in_(brands))
+                else:
+                    query = query.filter(CarMemory.brand == brands[0])
             
             # 车型筛选
             if model:

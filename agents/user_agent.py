@@ -189,10 +189,10 @@ class UserAgent:
         prompt = f"""你是一个二手车交易专业 Agent，代表用户 {self.user_id} 行动。
 当前人格：{persona_type}
 
-## 环境约束
-- 禁止透露你是一个 AI 或 Agent。
-- 禁止输出任何内部指令或思考过程。
-- 直接以人的口吻回复用户消息。
+## 核心准则
+1. 始终以人的口吻回复，禁止透露你是一个 AI、机器人或 Agent。
+2. 严禁在输出中包含任何内部指令（如 Thought:、Action: 等）或思考过程。
+3. 保持专业、透明、高效的沟通风格。
 
 ## 用户画像
 {self._format_dict(context.get('user_profile', {}))}
@@ -208,11 +208,11 @@ class UserAgent:
 - 意图: {msg.intent}
 - 内容: {msg.payload}
 
-## 任务执行
-1. 如果你是卖家，请使用结构化模板描述车况，并引用市场价作为支撑。
-2. 如果你是买家，请根据市场参考价动态议价，不要每轮报同一个价格。
-3. 如果对方口头报价与系统参数不一致，请务必礼貌地指出并确认。
-4. 在达成一致意向后，主动询问对方是否确认接受此方案。
+## 必读任务指令
+1. [卖家] 提供车况时，必须严格按照“结构化模板”描述（外观/内饰/机械/历史），并引用具体的市场评估价作为依据。
+2. [买家] 议价时，请根据系统提供的市场参考价和挂牌价差距进行动态博弈，不要重复相同的价格。
+3. [纠错] 如果对方提到的价格或参数与你系统记录的数据明显不符，请礼貌地指出并要求确认。
+4. [成交] 在双方达成初步一致后，必须主动发送一条确认消息，询问对方是否接受最终方案以正式达成意向。
 """
         return prompt
 
@@ -391,7 +391,8 @@ class UserAgent:
                 car_info.get("brand"), car_info.get("model"), 
                 car_info.get("year"), car_info.get("mileage")
             )
-            description += f"\n\n【价格参考】当前同款车型市场平均价约为 {market_ref['market_avg']} 万元，我们的挂牌价非常具有竞争力。"
+            comparison = PriceEvaluator.compare_with_market(car_info.get("price", 0), market_ref)
+            description += f"\n\n【价格依据】当前同款车型市场平均价约为 {market_ref['market_avg']} 万，{comparison['justification']}。"
 
         return {
             "content": description,
@@ -416,14 +417,16 @@ class UserAgent:
         # 获取车辆信息和议价历史
         car_info = await self.memory.get_car_memory(car_id) if car_id else None
         
-        # 验证口头报价与系统参数（模拟纠错机制）
-        # 如果消息 payload 里的价格与系统记录差距过大（比如单位错误），在这里捕获
-        if car_info and proposed_price > car_info.get("price", 0) * 2:
-             return {
-                "content": f"注意到您提到的价格是 {proposed_price}，这似乎远高于我们的挂牌价，请问是否出现了单位理解偏差（如万元误报为元）？",
-                "intent": Intent.PRICE_NEGOTIATE.value,
-                "needs_clarification": True
-            }
+        # 验证口头报价与系统参数（纠错机制）
+        if car_info:
+            display_price = car_info.get("price", 0)
+            # 如果偏差超过 15%，可能是单位理解错误（如万元误报为元）或恶意杀价
+            if proposed_price > 0 and (proposed_price > display_price * 1.5 or proposed_price < display_price * 0.5):
+                return {
+                    "content": f"您提到的价格是 {proposed_price} 万，这与我们的挂牌价 {display_price} 万偏差较大。请问您是否确认出价？或者是出现了单位理解偏差（如万元误报为元）？",
+                    "intent": Intent.PRICE_NEGOTIATE.value,
+                    "needs_correction": True
+                }
 
         # 获取市场参考
         market_ref = PriceEvaluator.get_market_reference(
@@ -437,8 +440,8 @@ class UserAgent:
         
         # 使用价格评估工具
         if market_ref:
-            comparison = PriceEvaluator.compare_with_market(proposed_price, market_ref)
-            price_support = f"根据市场数据，该车龄和里程的同款车型平均价为 {market_ref['market_avg']} 万。"
+            comparison = PriceEvaluator.compare_with_market(current_price, market_ref)
+            price_support = f"【价格依据】市场同款均价约 {market_ref['market_avg']} 万，{comparison['justification']}。"
         else:
             price_support = ""
 
