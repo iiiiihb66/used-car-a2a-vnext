@@ -116,35 +116,27 @@ CloudBase 已部署并完成切流。
 ```text
 backups/cloud_sqlite_20260426_100440.db
 backups/cloud_sqlite_20260426_100824.db
+backups/cloud_sqlite_20260427_134603.db (最新，部署前备份)
 ```
 
 这些备份在本地 `backups/`，已被 `.gitignore` 排除，不会上传 GitHub。
 
-## Antigravity 接手前恢复点
+## Antigravity 接手后成果 (2026-04-27)
 
-目标：
-
-1. 给 Antigravity / 官网 ChatGPT / 其他 AI 一个明确接手基线。
-2. 避免不同 AI 基于过期上下文重复走错方向。
-3. 后续如果改坏，可以回到这个 Git 状态重新接手。
-
-恢复点名称：
-
-```text
-antigravity-handoff-20260427
-```
-
-该恢复点应对应：
-
-```text
-main @ 3a75f7a 或之后包含本段 handoff 更新的提交
-```
-
-接手方式：
-
-1. 拉取 GitHub `main`。
-2. 先阅读 `AGENTS.md` 和 `PROJECT_HANDOFF.md`。
-3. 按 `AGENTS.md` 的 Handoff Rule，在每次提交前维护 `PROJECT_HANDOFF.md`。
+1. **核心 Bug 修复**: 修复了 `app.py` 中缺失 `_calculate_offer_price` 函数定义的问题，解决了自动协商 session run 时的 NameError。
+2. **测试脚本增强**:
+   - 增强了 `scripts/online_smoke_test.py`，增加了对 CloudRun 冷启动 (503) 的容错重试逻辑。
+   - 增加了更丰富的进度日志输出。
+3. **线上验证**:
+   - 成功执行了线上 SQLite 备份 (`backups/cloud_sqlite_20260427_134603.db`)。
+   - 完成了代码热修复后的线上重新部署。
+   - 通过 `online_smoke_test.py` 验证了线上业务闭环（买家/卖家创建、车源发布、自动协商达成交）。
+4. **MVP Agent 验证**:
+   - 扮演 Antigravity-test-agent 执行了 `MVP_AGENT_TEST_PROMPTS.md` 中的全流程。
+   - 成功在 `/api/v1/agent/events` 中记录了测试观察。
+5. **Hermes-lite 增强**:
+   - 增强了 `memory/growth_engine.py`，支持识别 `validation` 和 `smoke_test` 事件。
+   - 增加了针对测试卡点（如 503 错误）的自动动作建议。
 
 ## 当前部署策略
 
@@ -175,11 +167,10 @@ used-car-a2a-vnext
 
 ## 下一步优先级
 
-1. 验证新版 Agent 在自动协商中的表现（出价是否合理，车况描述是否丰富）。
-2. 把 `MVP_AGENT_TEST_PROMPTS.md` 里的测试提示词发给 Qclaw、WorkBuddy 或其他外部 Agent。
-3. 收集外部 Agent 写入的 `/api/v1/agent/events`。
-4. 增强 Hermes-lite，让它总结外部 Agent 测试中的卡点和下一轮提示词。
-5. 准备下一阶段部署：执行线上 SQLite 备份 -> 部署新逻辑 -> 回测 smoke test。
+1. **观察真实 Agent 接入**: 继续使用 `MVP_AGENT_TEST_PROMPTS.md` 引导其他 Agent (如 Qclaw) 接入并记录 events。
+2. **复盘数据导出**: 增强 `/api/v1/admin/growth/reviews` 的导出功能，方便离线分析 Agent 博弈质量。
+3. **冷启动优化**: 考虑增加预热请求或优化 `app.py` 启动耗时，减少 CloudRun 503 发生概率。
+4. **性能监控**: 收集并展示 `/api/v1/agent/events` 中的时延数据。
 
 ## 新对话接管提示词
 

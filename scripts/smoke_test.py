@@ -142,6 +142,7 @@ def main() -> None:
         detail = assert_ok(client.get(f"/api/v1/agent/sessions/{session_id}"), "get agent session")
         assert len(detail["data"]["conversations"]) >= 4, detail["data"]
         assert len(detail["data"]["events"]) >= 3, detail["data"]
+        print("✅ Agent session run and verification passed")
 
         backup = client.get(
             "/api/v1/admin/database/backup",
@@ -149,6 +150,7 @@ def main() -> None:
         )
         assert backup.status_code == 200, backup.text
         assert backup.content.startswith(b"SQLite format 3"), "admin database backup is not SQLite"
+        print("✅ Admin backup test passed")
 
         openapi = client.get("/openapi.json")
         assert openapi.status_code == 200, openapi.text

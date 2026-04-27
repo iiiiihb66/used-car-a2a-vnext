@@ -25,10 +25,23 @@ def main():
 
     with httpx.Client(base_url=base_url, timeout=90.0) as client:
         # Health Check
-        health = client.get("/health")
-        assert health.status_code == 200, health.text
-        assert health.json()["status"] == "healthy"
-        print("Health check passed.")
+        try:
+            health = client.get("/health")
+            if health.status_code == 503:
+                print("⚠️  Received 503 (Service Temporarily Unavailable). This is likely a CloudRun cold start. Retrying in 10s...")
+                import time
+                time.sleep(10)
+                health = client.get("/health")
+            
+            assert health.status_code == 200, f"Health check failed: {health.status_code} {health.text}"
+            assert health.json()["status"] == "healthy"
+            print("Health check passed.")
+        except httpx.ConnectError as e:
+            print(f"❌ Connection error: {e}. Check if the URL is correct and the service is up.")
+            sys.exit(1)
+        except Exception as e:
+            print(f"❌ Unexpected error during health check: {e}")
+            sys.exit(1)
 
         # Root Check
         root = client.get("/")
@@ -98,7 +111,7 @@ def main():
             "create car",
         )
         car_id = car["data"]["car_id"]
-        print(f"Created car {car_id}")
+        print(f"✅ Created car {car_id}")
 
         # Create session
         session = assert_ok(
@@ -132,7 +145,7 @@ def main():
             summary = run["data"]["summary"]
             assert summary["session_id"] == session_id, summary
             assert summary["rounds"] >= 1, summary
-            print(f"Session run completed. Final state: {summary['final_state']}")
+            print(f"✅ Session run completed. Final state: {summary['final_state']}")
 
         # Verify detail
         detail = assert_ok(client.get(f"/api/v1/agent/sessions/{session_id}"), "get agent session")

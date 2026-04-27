@@ -150,13 +150,16 @@ class GrowthEngine:
             or "empty" in event.event_type
             or "error" in event.event_type
         ]
-        successes = [event for event in events if event.status == "succeeded"]
+        successes = [event for event in events if event.status == "succeeded" or event.status == "observed"]
+        validations = [event for event in events if "validation" in event.event_type or "smoke_test" in event.event_type]
         return {
             "event_types": dict(event_types),
             "failed_or_empty_count": len(failures),
             "succeeded_count": len(successes),
+            "validation_count": len(validations),
             "failure_event_ids": [event.id for event in failures],
             "success_event_ids": [event.id for event in successes],
+            "validation_event_ids": [event.id for event in validations],
         }
 
     def _collect_observations(self, events: List[AgentEvent]) -> List[Dict[str, Any]]:
@@ -199,6 +202,12 @@ class GrowthEngine:
                     if event.event_type in {"inquiry_sent", "price_negotiate"}
                 ],
             })
+        if event_summary.get("validation_count", 0) > 0:
+            updates.append({
+                "memory_type": "mvp_validation_report",
+                "content": "检测到 MVP 验证或冒烟测试事件，应汇总测试观察以指导下一版迭代。",
+                "source_event_ids": event_summary["validation_event_ids"],
+            })
         return updates
 
     def _build_next_actions(self, event_summary: Dict[str, Any]) -> List[str]:
@@ -211,6 +220,8 @@ class GrowthEngine:
             actions.append("对新增车源触发车档完整度检查，缺失维保/事故/价格记录时提醒卖家补档。")
         if event_types.get("inquiry_sent", 0) or event_types.get("price_negotiate", 0):
             actions.append("把询价和议价结果写回 Agent 事件，用于下一轮价格区间建议。")
+        if event_summary.get("validation_count", 0) > 0:
+            actions.append("提取 MVP 验证中的具体卡点（如 503 错误、权限问题）并固化到 smoke_test。")
         if not actions:
             actions.append("继续记录 Qclaw / WorkBuddy 事件，累计更多样本后生成更可靠的技能候选。")
         return actions

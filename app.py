@@ -208,8 +208,7 @@ def _get_agent_session_config(db, session_id: str) -> Dict[str, Any]:
     if not event:
         raise HTTPException(status_code=404, detail="自动协商会话不存在")
     return event.input_snapshot or {}
-
-
+def _calculate_offer_price(car: CarMemory, config: Dict[str, Any], round_index: int) -> float:
     # 使用价格评估工具进行动态出价逻辑
     market_ref = PriceEvaluator.get_market_reference(
         car.brand, car.model, car.year, car.mileage
