@@ -1,6 +1,6 @@
 # Project Handoff
 
-更新时间：2026-04-27 10:52 Asia/Shanghai
+更新时间：2026-04-27 12:00 Asia/Shanghai
 
 ## 用途
 
@@ -80,6 +80,12 @@ cbfd53f docs: add mvp test prompts for qclaw and workbuddy
 9. `MVP_AGENT_TEST_PROMPTS.md` 提供 Qclaw、WorkBuddy 和通用 Agent 测试提示词。
 10. Skill / OpenAPI 文案已明确支持任意外部 Agent，不绑定 Qclaw / WorkBuddy。
 11. 新增 `scripts/online_smoke_test.py`，把线上业务闭环验证固化成可重复脚本，带有 CloudRun 冷启动超时控制。
+12. **Agent 核心优化 (Antigravity)**:
+    - **买家 (Qclaw-buyer)**: 支持 `proposed_price` 动态递增出价（参考评估价与展示价差），支持批量品牌匹配，增加 `deal_ready` 后的主动确认流程。
+    - **卖家 (WorkBuddy-seller)**: 实现结构化车况模板（外观、内饰、机械、历史），引用市场平均价数据支撑出价，增加报价一致性纠错。
+    - **通用性**: 在 `UserAgent` 层面隐藏 AI 身份和内部指令，提升对话模拟真实度。
+    - **工具化**: 新增 `utils/price_tools.py` 提供估价引擎和描述模板。
+    - **API 优化**: 修复 `POST /api/v1/cars` 字段冗余，统一支持 `owner_id` 在 Body 传输。
 
 ## GitHub 与线上状态
 
@@ -169,11 +175,11 @@ used-car-a2a-vnext
 
 ## 下一步优先级
 
-1. 把 `MVP_AGENT_TEST_PROMPTS.md` 里的测试提示词发给 Qclaw、WorkBuddy 或其他外部 Agent。
-2. 收集外部 Agent 写入的 `/api/v1/agent/events`。
-3. 根据真实测试卡点修最小阻塞问题。
+1. 验证新版 Agent 在自动协商中的表现（出价是否合理，车况描述是否丰富）。
+2. 把 `MVP_AGENT_TEST_PROMPTS.md` 里的测试提示词发给 Qclaw、WorkBuddy 或其他外部 Agent。
+3. 收集外部 Agent 写入的 `/api/v1/agent/events`。
 4. 增强 Hermes-lite，让它总结外部 Agent 测试中的卡点和下一轮提示词。
-5. 只有在免费方案仍能满足时，才评估 CloudBase 文档型数据库 HTTP API。
+5. 准备下一阶段部署：执行线上 SQLite 备份 -> 部署新逻辑 -> 回测 smoke test。
 
 ## 新对话接管提示词
 

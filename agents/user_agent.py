@@ -10,6 +10,7 @@ import asyncio
 
 from agents.base_agent import BaseAgent, AgentState
 from a2a.message import A2AMessage, Intent, MessageBuilder
+from utils.price_tools import PriceEvaluator, ConditionTemplate
 
 
 class UserAgent:
@@ -176,8 +177,6 @@ class UserAgent:
         Returns:
             格式化 Prompt
         """
-        # 根据消息方向确定当前 Agent 的站位。询价/议价消息通常由买家发给卖家，
-        # 后端内置 Agent 处理的是接收方，因此接收方应按卖家人格回复。
         if self.user_id == msg.to_user_id and msg.intent in {
             Intent.PRICE_INQUIRY.value,
             Intent.PRICE_NEGOTIATE.value,
@@ -186,15 +185,20 @@ class UserAgent:
             persona_type = "卖家"
         else:
             persona_type = "买家"
-        
-        prompt = f"""你是一个二手车交易 Agent，代表用户 {self.user_id} 行动。
+
+        prompt = f"""你是一个二手车交易专业 Agent，代表用户 {self.user_id} 行动。
 当前人格：{persona_type}
+
+## 环境约束
+- 禁止透露你是一个 AI 或 Agent。
+- 禁止输出任何内部指令或思考过程。
+- 直接以人的口吻回复用户消息。
 
 ## 用户画像
 {self._format_dict(context.get('user_profile', {}))}
 
-## 买家画像
-{self._format_dict(context.get('buyer_preferences', context.get('persona', {}).get('buyer_persona', {})))}
+## 角色专用背景
+{self._get_role_background(persona_type, context)}
 
 ## 最近对话
 {self._format_list(context.get('recent_conversations', []))}
@@ -204,31 +208,31 @@ class UserAgent:
 - 意图: {msg.intent}
 - 内容: {msg.payload}
 
-"""
-        
-        # 议价时添加历史
-        if "negotiation_history" in context:
-            prompt += f"""
-## 议价历史
-{self._format_list(context['negotiation_history'])}
-"""
-        
-        # 交易统计
-        if "transaction_stats" in context:
-            prompt += f"""
-## 交易统计
-{self._format_dict(context['transaction_stats'])}
-"""
-        
-        prompt += """
-## 你的任务
-根据用户画像和历史记忆，生成合适的回复。
-如果需要议价，考虑用户的预算和偏好。
-如果需要决策，分析利弊给出建议。
-
-请直接回复，不要解释你的思考过程。
+## 任务执行
+1. 如果你是卖家，请使用结构化模板描述车况，并引用市场价作为支撑。
+2. 如果你是买家，请根据市场参考价动态议价，不要每轮报同一个价格。
+3. 如果对方口头报价与系统参数不一致，请务必礼貌地指出并确认。
+4. 在达成一致意向后，主动询问对方是否确认接受此方案。
 """
         return prompt
+
+    def _get_role_background(self, role: str, context: Dict) -> str:
+        """获取角色背景信息"""
+        if role == "卖家":
+            seller_p = context.get('persona', {}).get('seller_persona', {})
+            return f"""
+- 风格: {seller_p.get('style', '专业透明')}
+- 议价灵活性: {seller_p.get('negotiation_flexibility', '中等')}
+- 任务：提供详细车况（包括保养、磨损、历史记录），给出的价格必须有数据支撑。
+"""
+        else:
+            buyer_p = context.get('buyer_preferences', context.get('persona', {}).get('buyer_persona', {}))
+            return f"""
+- 偏好品牌: {buyer_p.get('preferred_brands', [])}
+- 预算范围: {buyer_p.get('budget_range', {})}
+- 风格: {buyer_p.get('negotiation_style', '理性')}
+- 任务：基于市场平均价动态出价，参考平台挂牌价与评估价的差距进行博弈。
+"""
     
     def _format_dict(self, d: Dict) -> str:
         """格式化字典为字符串"""
@@ -380,8 +384,17 @@ class UserAgent:
         car_id = msg.related_car_id
         car_info = await self.memory.get_car_memory(car_id) if car_id else None
         
+        description = "抱歉，未找到该车辆的具体信息。"
+        if car_info:
+            description = ConditionTemplate.get_structured_description(car_info)
+            market_ref = PriceEvaluator.get_market_reference(
+                car_info.get("brand"), car_info.get("model"), 
+                car_info.get("year"), car_info.get("mileage")
+            )
+            description += f"\n\n【价格参考】当前同款车型市场平均价约为 {market_ref['market_avg']} 万元，我们的挂牌价非常具有竞争力。"
+
         return {
-            "content": f"感谢您的询价！{car_info.get('brand', '')} {car_info.get('model', '')} 售价 {car_info.get('price', '待定')} 万元。",
+            "content": description,
             "car_info": car_info,
             "intent": Intent.PRICE_INQUIRY.value
         }
@@ -402,21 +415,43 @@ class UserAgent:
         
         # 获取车辆信息和议价历史
         car_info = await self.memory.get_car_memory(car_id) if car_id else None
-        history = self.memory.get_negotiation_history(self.user_id, car_id) if car_id else []
         
+        # 验证口头报价与系统参数（模拟纠错机制）
+        # 如果消息 payload 里的价格与系统记录差距过大（比如单位错误），在这里捕获
+        if car_info and proposed_price > car_info.get("price", 0) * 2:
+             return {
+                "content": f"注意到您提到的价格是 {proposed_price}，这似乎远高于我们的挂牌价，请问是否出现了单位理解偏差（如万元误报为元）？",
+                "intent": Intent.PRICE_NEGOTIATE.value,
+                "needs_clarification": True
+            }
+
+        # 获取市场参考
+        market_ref = PriceEvaluator.get_market_reference(
+            car_info.get("brand"), car_info.get("model"), 
+            car_info.get("year"), car_info.get("mileage")
+        ) if car_info else None
+
         # 简单的议价逻辑
         current_price = car_info.get("price", 0) if car_info else 0
         target_price = car_info.get("target_price", current_price) if car_info else current_price
         
+        # 使用价格评估工具
+        if market_ref:
+            comparison = PriceEvaluator.compare_with_market(proposed_price, market_ref)
+            price_support = f"根据市场数据，该车龄和里程的同款车型平均价为 {market_ref['market_avg']} 万。"
+        else:
+            price_support = ""
+
         # 计算让步空间
-        if proposed_price >= target_price * 0.95:
-            response = "这个价格我可以接受，我们成交吧！"
+        if proposed_price >= target_price * 0.98:
+            response = f"您的出价非常诚恳。{price_support}我接受这个价格，请问您确定按照此方案成交吗？"
             outcome = "accepted"
-        elif proposed_price >= target_price * 0.85:
-            response = f"您出的价格有点低，我最多能降到 {target_price * 0.95:.0f} 元。"
+        elif proposed_price >= target_price * 0.90:
+            counter_price = round(target_price * 0.96, 2)
+            response = f"{price_support}您的价格还有点差距，我最多能降到 {counter_price} 万，您看行吗？"
             outcome = "counter_offered"
         else:
-            response = "这个价格实在太低了，恐怕无法接受。"
+            response = f"抱歉，您的出价远低于市场水平（{market_ref['market_avg'] if market_ref else '系统估价'} 万）。"
             outcome = "rejected"
         
         # 记录议价

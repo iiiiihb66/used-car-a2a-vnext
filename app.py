@@ -46,6 +46,7 @@ from models.point_transaction import PointTransaction
 from models.reputation import ReputationEngine
 from models.seller_report import SellerReport
 from models.user import User
+from utils.price_tools import PriceEvaluator, ConditionTemplate
 
 
 APP_TITLE = "二手车 A2A 档案协商工具"
@@ -209,24 +210,29 @@ def _get_agent_session_config(db, session_id: str) -> Dict[str, Any]:
     return event.input_snapshot or {}
 
 
-def _calculate_offer_price(
-    car: CarMemory,
-    config: Dict[str, Any],
-    round_index: int,
-) -> float:
+    # 使用价格评估工具进行动态出价逻辑
+    market_ref = PriceEvaluator.get_market_reference(
+        car.brand, car.model, car.year, car.mileage
+    )
+    market_avg = market_ref["market_avg"]
+    
     display_price = float(car.price or 0)
     target_price = config.get("buyer_target_price")
     budget_max = config.get("buyer_budget_max")
 
+    # 初始报价：参考评估价和展示价，取较低的一个并打折
+    base_anchor = min(display_price, market_avg)
     if target_price:
         base_offer = float(target_price)
     elif budget_max:
-        base_offer = min(float(budget_max), display_price * 0.96)
+        base_offer = min(float(budget_max), base_anchor * 0.94)
     else:
-        base_offer = display_price * 0.96
+        base_offer = base_anchor * 0.94
 
-    # 每轮小幅让步，但不超过预算上限和展示价。
-    offer = base_offer + max(round_index - 1, 0) * display_price * 0.012
+    # 每轮动态递增，博弈空间根据展示价与评估价的差距决定
+    increment_factor = 0.015 if display_price > market_avg else 0.01
+    offer = base_offer + max(round_index - 1, 0) * display_price * increment_factor
+    
     if budget_max:
         offer = min(offer, float(budget_max))
     return round(min(offer, display_price), 2)
@@ -265,6 +271,7 @@ class CarCreate(BaseModel):
     series: Optional[str] = Field(None, description="车系")
     original_price: Optional[float] = Field(None, description="新车价")
     target_price: Optional[float] = Field(None, description="目标成交价")
+    owner_id: Optional[int] = Field(None, description="车主用户ID（传此字段则忽略 Query 中的 user_id）")
 
 
 class LifecycleRecordCreate(BaseModel):
@@ -595,11 +602,15 @@ async def get_demand_matches(
 @app.post("/api/v1/cars")
 async def create_car(
     car_data: CarCreate,
-    user_id: int = Query(..., description="车主用户ID"),
+    user_id: Optional[int] = Query(None, description="车主用户ID（建议统一在 Body 中传 owner_id）"),
     db=Depends(get_db),
 ) -> Dict[str, Any]:
+    actual_owner_id = car_data.owner_id or user_id
+    if not actual_owner_id:
+        raise HTTPException(status_code=400, detail="必须提供车主 ID (owner_id 或 user_id)")
+
     memory = get_memory_service(db)
-    user = memory.get_user(user_id)
+    user = memory.get_user(actual_owner_id)
     if not user:
         raise HTTPException(status_code=404, detail="车主不存在")
 
@@ -618,7 +629,7 @@ async def create_car(
         "city": car_data.city,
         "transmission": car_data.transmission,
         "fuel_type": car_data.fuel_type,
-        "owner_id": user_id,
+        "owner_id": actual_owner_id,
         "is_listed": True,
         "current_status": "上架中",
     }
@@ -1040,12 +1051,25 @@ async def run_agent_session(
             },
             observation=(
                 f"自动协商第 {round_index} 轮完成，报价 {proposed_price} 万，"
-                f"{'已接近成交' if deal_ready else '继续观察'}。"
+                f"{'已达成初步意向，等待确认' if deal_ready else '继续博弈'}。"
             ),
             score=1.0 if deal_ready else 0.6,
         )
 
         if deal_ready:
+            # 增加一个主动确认环节
+            confirm_prompt = f"买家 Agent 出价 {proposed_price} 万。卖家 Agent 已表示可以考虑。请问您确定按照此方案成交吗？"
+            confirm_message = MessageBuilder.create_message(
+                from_user_id=seller_id,
+                to_user_id=buyer_id,
+                content=confirm_prompt,
+            )
+            confirm_message.session_id = session_id
+            confirm_result = await bus.send(confirm_message)
+            confirm_content = _agent_response_content(confirm_result)
+            
+            turn["confirmation"] = confirm_content
+            
             final_state = "deal_ready"
             agreed_price = proposed_price
             if auto_deal:

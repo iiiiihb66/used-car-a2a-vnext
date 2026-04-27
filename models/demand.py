@@ -127,8 +127,10 @@ class DemandPool(Base):
         if self.mileage_max and car.get("mileage", 0) > self.mileage_max:
             return False
         
-        # 检查品牌
-        if self.brand_preference and car.get("brand", "") != self.brand_preference:
-            return False
+        # 检查品牌（支持批量，以逗号分隔）
+        if self.brand_preference:
+            preferred_brands = [b.strip() for b in self.brand_preference.split(",") if b.strip()]
+            if preferred_brands and car.get("brand", "") not in preferred_brands:
+                return False
         
         return True

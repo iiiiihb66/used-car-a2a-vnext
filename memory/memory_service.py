@@ -298,7 +298,11 @@ class MemoryService:
         query = self.db.query(CarMemory).filter(CarMemory.is_listed == True)
         
         if brand:
-            query = query.filter(CarMemory.brand == brand)
+            brands = [b.strip() for b in brand.split(",") if b.strip()]
+            if len(brands) == 1:
+                query = query.filter(CarMemory.brand == brands[0])
+            elif len(brands) > 1:
+                query = query.filter(CarMemory.brand.in_(brands))
         if min_price:
             query = query.filter(CarMemory.price >= min_price)
         if max_price:
