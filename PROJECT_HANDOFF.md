@@ -1,6 +1,6 @@
 # Project Handoff
 
-更新时间：2026-04-27 00:00 Asia/Shanghai
+更新时间：2026-04-27 10:52 Asia/Shanghai
 
 ## 用途
 
@@ -79,6 +79,7 @@ cbfd53f docs: add mvp test prompts for qclaw and workbuddy
 8. `SQLITE_OPERATIONS.md` 固化部署前后操作流程。
 9. `MVP_AGENT_TEST_PROMPTS.md` 提供 Qclaw、WorkBuddy 和通用 Agent 测试提示词。
 10. Skill / OpenAPI 文案已明确支持任意外部 Agent，不绑定 Qclaw / WorkBuddy。
+11. 新增 `scripts/online_smoke_test.py`，把线上业务闭环验证固化成可重复脚本，带有 CloudRun 冷启动超时控制。
 
 ## GitHub 与线上状态
 
@@ -172,8 +173,7 @@ used-car-a2a-vnext
 2. 收集外部 Agent 写入的 `/api/v1/agent/events`。
 3. 根据真实测试卡点修最小阻塞问题。
 4. 增强 Hermes-lite，让它总结外部 Agent 测试中的卡点和下一轮提示词。
-5. 补一个 `scripts/online_smoke_test.py`，把线上业务闭环验证固化成可重复命令。
-6. 只有在免费方案仍能满足时，才评估 CloudBase 文档型数据库 HTTP API。
+5. 只有在免费方案仍能满足时，才评估 CloudBase 文档型数据库 HTTP API。
 
 ## 新对话接管提示词
 
