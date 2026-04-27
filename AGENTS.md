@@ -67,6 +67,22 @@ This rule applies to:
 - deployment preparation
 - bugfix / review / refactor work
 
+## Handoff Rule
+
+`PROJECT_HANDOFF.md` is the canonical continuation document for any AI agent
+that takes over this project.
+
+Before every commit that changes code, docs, deployment configuration, tests, or
+project direction:
+
+1. Update `PROJECT_HANDOFF.md`
+2. Record what changed
+3. Record what was verified
+4. Record current local / GitHub / CloudBase state when relevant
+5. Record the next recommended task
+
+Do not push work to GitHub without keeping `PROJECT_HANDOFF.md` current.
+
 ## Required Checks Before Shipping
 
 1. `app.py` imports successfully
@@ -78,13 +94,13 @@ This rule applies to:
 
 ## Near-Term Priorities
 
-1. Wire CloudBase deployment config
-2. Replace local SQLite with CloudBase SQL in production
-3. Connect Mini Program frontend to `/api/v1/*`
-4. Add lightweight API regression tests for the production endpoints
-5. Turn manual Qclaw / WorkBuddy copy-paste testing into a platform scheduler loop
-6. Add Agent memory and observation records for demand failures, seller response
-   quality, and negotiation outcomes
+1. Keep the SQLite-first CloudBase MVP stable without paid private networking
+2. Run Qclaw / WorkBuddy / generic Agent MVP tests using `MVP_AGENT_TEST_PROMPTS.md`
+3. Collect `/api/v1/agent/events` from external Agent testing
+4. Add `scripts/online_smoke_test.py` for repeatable post-deploy checks
+5. Improve Hermes-lite summaries for test blockers and next-round prompts
+6. Consider CloudBase document database HTTP API only after free MVP usage shows
+   the SQLite backup/restore workflow is insufficient
 
 ## Future Architecture Guardrail
 

@@ -1,6 +1,6 @@
 # Project Handoff
 
-更新时间：2026-04-26 10:15 Asia/Shanghai
+更新时间：2026-04-27 00:00 Asia/Shanghai
 
 ## 用途
 
@@ -112,6 +112,32 @@ backups/cloud_sqlite_20260426_100824.db
 ```
 
 这些备份在本地 `backups/`，已被 `.gitignore` 排除，不会上传 GitHub。
+
+## Antigravity 接手前恢复点
+
+目标：
+
+1. 给 Antigravity / 官网 ChatGPT / 其他 AI 一个明确接手基线。
+2. 避免不同 AI 基于过期上下文重复走错方向。
+3. 后续如果改坏，可以回到这个 Git 状态重新接手。
+
+恢复点名称：
+
+```text
+antigravity-handoff-20260427
+```
+
+该恢复点应对应：
+
+```text
+main @ 3a75f7a 或之后包含本段 handoff 更新的提交
+```
+
+接手方式：
+
+1. 拉取 GitHub `main`。
+2. 先阅读 `AGENTS.md` 和 `PROJECT_HANDOFF.md`。
+3. 按 `AGENTS.md` 的 Handoff Rule，在每次提交前维护 `PROJECT_HANDOFF.md`。
 
 ## 当前部署策略
 
