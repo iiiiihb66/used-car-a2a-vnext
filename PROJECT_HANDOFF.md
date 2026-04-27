@@ -83,7 +83,7 @@ cbfd53f docs: add mvp test prompts for qclaw and workbuddy
 12. **Agent 核心优化 (Antigravity)**:
     - **买家 (Qclaw-buyer)**: 支持 `proposed_price` 动态递增出价（参考评估价与展示价差），支持批量品牌匹配，增加 `deal_ready` 后的主动确认流程。
     - **卖家 (WorkBuddy-seller)**: 实现结构化车况模板（外观、内饰、机械、历史），引用市场平均价数据支撑出价，增加报价一致性纠错。
-    - **通用性**: 在 `UserAgent` 层面隐藏 AI 身份和内部指令，提升对话模拟真实度。
+    - **专用 Agent 分离**: 新增 `agents/qclaw_buyer.py`，将买家定价逻辑抽离，支持非线性动态出价博弈。
     - **工具化**: 新增 `utils/price_tools.py` 提供估价引擎和描述模板。
     - **API 优化**: 修复 `POST /api/v1/cars` 字段冗余，统一支持 `owner_id` 在 Body 传输。
 
