@@ -178,7 +178,7 @@ backups/cloud_sqlite_20260427_134603.db (最新，部署前备份)
 
 ## 当前 GitHub 与线上状态
 
-GitHub 提交: `325f942` (fix: persist session summary and enforce price consistency)
+GitHub 提交: `54aa858` (fix: resolve P0 encoding, price anomalies, and 504 timeouts)
 
 线上服务：
 - `used-car-a2a-vnext`
@@ -252,7 +252,9 @@ used-car-a2a-vnext
 - 最近线上已部署提交是 3f8efb2
 
 当前任务：
-[填写要继续做的具体任务]
+1. 观察线上 WorkBuddy 与 Qclaw 的协作稳定性。
+2. 收集 /api/v1/agent/events 的复盘数据。
+3. 优化 Hermes-lite 的自动复盘总结深度。
 ```
 
 ## 给其他 AI 的接管要求
