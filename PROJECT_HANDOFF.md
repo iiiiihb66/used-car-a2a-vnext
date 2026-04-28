@@ -148,6 +148,10 @@ backups/cloud_sqlite_20260427_134603.db (最新，部署前备份)
    - **防止指令泄露**: 在 `A2AMessage` 和 `Conversation` 中引入 `is_system` 标识，自动隐藏调度器 Prompt 及其回复。
    - **消除重复记录**: 修复了 `UserAgent` 和 `A2ABus` 之间的冗余存储逻辑，解决了对话历史翻倍的问题。
    - **议价逻辑优化**: 精简 `_is_deal_ready` 关键词匹配，排除了“促成交易”等语义误伤，提升了自动撮合的准确性。
+8. **P0 修复: 单实例固化 (2026-04-28)**:
+   - **问题**: CloudBase 默认多实例 (maxCount=2) 导致 SQLite 本地数据库状态不一致。`create`/`run` 在 A 实例，`get` 可能在 B 实例，导致 404 错误。
+   - **策略**: 锁定 CloudRun 实例数为 `minCount=1 / maxCount=1`。这是 MVP 阶段确保 SQLite 数据一致性的最小可行方案。
+   - **安全**: 从 `cloudbaserc.json` 中移除了明文 Token，改为腾讯云控制台环境变量管理。
 
 CloudBase 环境：
 

@@ -14,8 +14,8 @@
           "cpu": 0.5,
           "mem": 1,
           "policy": "PARALLEL",
-          "maxCount": 2,
-          "minCount": 0,
+          "maxCount": 1,
+          "minCount": 1,
           "envVariables": {
             "PORT": "80",
             "APP_MODE": "tool"
