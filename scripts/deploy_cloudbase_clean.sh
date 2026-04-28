@@ -23,8 +23,9 @@ rsync -a "$PROJECT_ROOT/" "$DEPLOY_DIR/" \
   --exclude '*.pyc' \
   --exclude '.pytest_cache/'
 
-# 使用 tcb framework deploy 以应用 cloudbaserc.json 中的实例数配置 (minCount=1, maxCount=1)
-cd "$DEPLOY_DIR"
-/Users/fuhongbo/.npm-global/bin/tcb framework deploy \
+/Users/fuhongbo/.npm-global/bin/tcb cloudrun deploy \
   -e "$ENV_ID" \
+  -s "$SERVICE_NAME" \
+  --source "$DEPLOY_DIR" \
+  --port 80 \
   --force
