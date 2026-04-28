@@ -17,39 +17,45 @@ class PriceEvaluator:
         """
         # 基础折旧逻辑（模拟数据）
         current_year = 2026
-        age = current_year - year
+        age = max(0, current_year - year)
         
-        # 假设新车价（如果模型中没有，则根据品牌大致估算）
-        # 这里简化处理，仅作为演示工具
+        # 扩大品牌覆盖面，并设置更真实的新车价参考（万元）
         base_price_map = {
-            "丰田": 15.0,
-            "本田": 16.0,
-            "比亚迪": 14.0,
-            "大众": 18.0,
-            "宝马": 35.0,
-            "奔驰": 40.0
+            "丰田": 18.0,
+            "本田": 20.0,
+            "比亚迪": 16.0,
+            "大众": 19.0,
+            "宝马": 38.0,
+            "奔驰": 42.0,
+            "奥迪": 35.0,
+            "特斯拉": 28.0,
+            "理想": 32.0,
+            "问界": 30.0,
+            "吉利": 12.0,
+            "长安": 10.0
         }
         
-        new_car_price = base_price_map.get(brand, 20.0)
+        new_car_price = base_price_map.get(brand, 15.0)
         
-        # 折旧率计算：前三年每年15%，之后每年10%，每万公里额外折旧1%
+        # 折旧率计算：前三年每年12%，之后每年8%，每万公里额外折旧0.8%
+        # 修正：降低折旧速率，使其更符合保值率高的车型
         depreciation = 1.0
         for i in range(age):
             if i < 3:
-                depreciation *= 0.85
+                depreciation *= 0.88
             else:
-                depreciation *= 0.90
+                depreciation *= 0.92
         
-        depreciation -= (mileage / 10.0) * 0.01
-        depreciation = max(depreciation, 0.2) # 最低残值 20%
+        depreciation -= (mileage / 10.0) * 0.008
+        depreciation = max(depreciation, 0.25) # 最低残值提高到 25%
         
         market_avg = round(new_car_price * depreciation, 2)
         
         return {
             "market_avg": market_avg,
             "price_range": {
-                "low": round(market_avg * 0.92, 2),
-                "high": round(market_avg * 1.08, 2)
+                "low": round(market_avg * 0.94, 2),
+                "high": round(market_avg * 1.06, 2)
             },
             "age": age,
             "mileage": mileage,

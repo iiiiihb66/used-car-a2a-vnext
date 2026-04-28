@@ -1,6 +1,6 @@
 # Project Handoff
 
-更新时间：2026-04-27 12:00 Asia/Shanghai
+更新时间：2026-04-29 01:30 Asia/Shanghai
 
 ## 用途
 
@@ -144,14 +144,45 @@ backups/cloud_sqlite_20260427_134603.db (最新，部署前备份)
 
 ## 当前部署策略
 
-7. **Orchestration & 隐私优化 (2026-04-28)**:
-   - **防止指令泄露**: 在 `A2AMessage` 和 `Conversation` 中引入 `is_system` 标识，自动隐藏调度器 Prompt 及其回复。
-   - **消除重复记录**: 修复了 `UserAgent` 和 `A2ABus` 之间的冗余存储逻辑，解决了对话历史翻倍的问题。
-   - **议价逻辑优化**: 精简 `_is_deal_ready` 关键词匹配，排除了“促成交易”等语义误伤，提升了自动撮合的准确性。
-9. **P0 修复: 内部指令泄露防护 (2026-04-28)**:
-   - **问题**: 虽然数据已正确标记 `is_system=1`，但 `session detail` 和 `conversation history` 接口未进行过滤，导致内部调度 Prompt（如“请作为买家 Agent...”）泄露给外部用户。
-   - **策略**: 修改 `A2ABus.get_conversation_history` 和 `app.get_agent_session`，默认过滤 `is_system=1` 的消息。对 `AgentEvent` 记录进行脱敏处理，移除包含 Prompt 的原始快照，仅保留业务安全字段。
-   - **技术约束**: 坚持 SQLite-first 单实例部署，不引入外部数据库。
+## Antigravity 接手后成果 (2026-04-28)
+
+1. **Orchestration & 隐私优化**:
+    - **防止指令泄露**: 在 `A2AMessage` 和 `Conversation` 中引入 `is_system` 标识，自动隐藏调度器 Prompt 及其回复。
+    - **API 增强**: 修改 `A2ABus.get_conversation_history` 和 `app.get_agent_session`，默认过滤 `is_system=1` 的消息。
+    - **事件脱敏**: 对 `AgentEvent` 记录进行脱敏处理，移除包含 Prompt 的原始快照。
+    
+2. **P0/P1 修复: 持久化与一致性**:
+    - **Session 摘要持久化**: `GET /api/v1/agent/sessions/{session_id}` 接口现在返回完整 `summary`（成交价、状态、轮次等）。
+    - **成交确认入库**: 最终成交确认消息现在作为 `is_system=0` 对话入库，用户可见。
+    - **底价保护 (Floor Protection)**: 强化 `_is_deal_ready` 逻辑，确保 `agreed_price >= target_price`。
+    - **Agent 优化**: `QclawBuyer` 现在会在 Prompt 中明确引用平台评估价。
+
+## P0 问题修复成果 (2026-04-29)
+
+1. **中文编码修复**:
+    - 在 `app.py` 中引入 `add_utf8_charset` 中间件，强制所有 JSON 响应使用 `application/json; charset=utf-8`。
+    - 解决了微信小程序/CloudBase 环境下的中文字段乱码问题。
+
+2. **价格解析与单位规范化**:
+    - 升级 `utils/price_tools.py` 中的 `PriceEvaluator`，扩大品牌覆盖（本田、丰田、比亚迪等），优化折旧模型。
+    - 优化 `app.py` 中的 `_calculate_offer_price` 逻辑，将“评估价”与“展示价”加权平均作为协商锚点，避免买家报出极低价格。
+    - 增加了 `display_price * 0.5` 的硬性底价兜底，彻底杜绝 `2.88` 等离谱报价。
+
+3. **504 超时保护**:
+    - 在 `/run` 核心循环中增加 `max_duration = 25.0s` 耗时检查。
+    - 针对长耗时对话，在网关 30s 超时前自动停止并转为 `needs_human_review`，确保状态正常同步。
+
+4. **底价保护验证**:
+    - 修正了由于价格异常导致的底价逻辑失效。
+    - 在 `online_smoke_test.py` 中增加了 WorkBuddy 专项场景回归。
+
+## 当前 GitHub 与线上状态
+
+GitHub 提交: `325f942` (fix: persist session summary and enforce price consistency)
+
+线上服务：
+- `used-car-a2a-vnext`
+- 配置：SQLite-first, minCount=1, maxCount=1
 
 CloudBase 环境：
 

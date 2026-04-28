@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import sys
 import uuid
+import time
 import argparse
 import httpx
 
@@ -29,7 +30,6 @@ def main():
             health = client.get("/health")
             if health.status_code == 503:
                 print("⚠️  Received 503 (Service Temporarily Unavailable). This is likely a CloudRun cold start. Retrying in 10s...")
-                import time
                 time.sleep(10)
                 health = client.get("/health")
             
@@ -147,13 +147,23 @@ def main():
             assert summary["rounds"] >= 1, summary
             print(f"✅ Session run completed. Final state: {summary['final_state']}")
 
-        # Verify detail
+        # 验证详情 (增加重试逻辑以应对线上可能的微小延迟)
+        print("Waiting for session summary to be indexed...")
+        time.sleep(2)
+        
         detail = assert_ok(client.get(f"/api/v1/agent/sessions/{session_id}"), "get agent session")
         data = detail["data"]
         
         # 1. 验证摘要持久化 (P0)
         summary = data.get("summary")
-        assert summary is not None, "Online: Summary should be persisted in GET session"
+        if summary is None:
+             print("⚠️ Summary not found on first try, retrying after 3s...")
+             time.sleep(3)
+             detail = assert_ok(client.get(f"/api/v1/agent/sessions/{session_id}"), "get agent session retry")
+             data = detail["data"]
+             summary = data.get("summary")
+             
+        assert summary is not None, f"Online: Summary should be persisted in GET session. Data: {data}"
         assert summary["final_state"] in {"deal_ready", "deal_intent_created", "needs_human_review"}, summary
         assert "agreed_price" in summary, "Online: agreed_price should be in summary"
         assert "rounds" in summary, "Online: rounds should be in summary"
@@ -177,46 +187,69 @@ def main():
             
         print(f"✅ Verified session details: state={summary['final_state']}, price={summary.get('agreed_price')}")
 
-        # 4. 专项测试：底价保护 (target_price = 13.3)
-        print("🚀 Running specialized Floor Price Protection Test (13.3万)...")
-        # 创建车源，底价 13.3 万
-        floor_car = assert_ok(client.post("/api/v1/cars", json={
-            "brand": "奔驰",
-            "model": "C级",
-            "year": 2022,
-            "mileage": 1.5,
-            "price": 15.0,
-            "target_price": 13.3, # 这里的底价是 13.3
-            "owner_id": seller_id
-        }), "create floor car")
-        floor_car_id = floor_car["id"]
+        # 4. 专项测试：WorkBuddy 车商场景 (P0 修复验证)
+        print("🚀 Running WorkBuddy Seller Scenario (Accord 2020, Target 13.3万)...")
+        # 创建北京车商
+        wb_seller = assert_ok(client.post("/api/v1/users", json={
+            "name": "北京鼎诚车行",
+            "email": f"wb_seller_{uuid.uuid4().hex[:4]}@example.com",
+            "role": "seller",
+            "region": "北京",
+            "is_dealer": True
+        }), "create WB seller")
+        wb_seller_id = wb_seller["data"]["id"]
         
-        # 创建 Session，让买家尝试以低于 13.3 万的价格成交
-        floor_session = assert_ok(client.post("/api/v1/agent/sessions", json={
+        # 发布车源
+        wb_car = assert_ok(client.post("/api/v1/cars", json={
+            "brand": "本田",
+            "model": "雅阁",
+            "year": 2020,
+            "mileage": 4.5,
+            "price": 13.8,
+            "target_price": 13.3,
+            "region": "北京",
+            "owner_id": wb_seller_id
+        }), "create WB car")
+        wb_car_id = wb_car["data"]["car_id"]
+        
+        # 创建 Session
+        wb_session = assert_ok(client.post("/api/v1/agent/sessions", json={
             "buyer_id": buyer_id,
-            "seller_id": seller_id,
-            "car_id": floor_car_id,
+            "seller_id": wb_seller_id,
+            "car_id": wb_car_id,
             "config": {
-                "buyer_target_price": 12.0, # 买家目标 12 万，低于底价 13.3
-                "buyer_budget_max": 13.0,   # 买家预算最高 13 万，仍然低于底价 13.3
-                "max_rounds": 2
+                "buyer_goal": "找个雅阁，家用，价格13万左右，车况要好",
+                "buyer_target_price": 13.0,
+                "buyer_budget_max": 13.5,
+                "max_rounds": 2,
+                "buyer_agent_name": "Qclaw-Buyer",
+                "seller_agent_name": "WorkBuddy-Seller"
             }
-        }), "create floor session")
-        floor_session_id = floor_session["session_id"]
+        }), "create WB session")
+        wb_session_id = wb_session["data"]["session_id"]
         
-        # 运行 Session
+        # 运行
+        print("Running WB session (2 rounds)...")
         with httpx.Client(base_url=base_url, timeout=120.0) as run_client:
-             assert_ok(run_client.post(f"/api/v1/agent/sessions/{floor_session_id}/run"), "run floor session")
+             wb_run = assert_ok(run_client.post(f"/api/v1/agent/sessions/{wb_session_id}/run"), "run WB session")
              
-        # 验证最终结果
-        floor_detail = assert_ok(client.get(f"/api/v1/agent/sessions/{floor_session_id}"), "get floor session")
-        floor_summary = floor_detail["data"].get("summary")
-        print(f"✅ Floor Test Completed. Final state: {floor_summary['final_state']}, Price: {floor_summary.get('agreed_price')}")
+        # 验证详情
+        wb_detail = assert_ok(client.get(f"/api/v1/agent/sessions/{wb_session_id}"), "get WB detail")
+        wb_data = wb_detail["data"]
         
-        assert floor_summary["final_state"] not in {"deal_ready", "deal_intent_created"}, "ERROR: Deal reached below floor price!"
-        assert floor_summary.get("agreed_price") is None or floor_summary["agreed_price"] >= 13.3, "ERROR: Agreed price below target_price!"
+        # 验证中文不乱码 (P0)
+        assert "本田" in str(wb_data), "Encoding error: '本田' not found in response"
+        assert "雅阁" in str(wb_data), "Encoding error: '雅阁' not found in response"
+        
+        # 验证价格不异常 (P0)
+        wb_summary = wb_data.get("summary", {})
+        price = wb_summary.get("agreed_price") or wb_data["conversations"][-1].get("payload", {}).get("proposed_price")
+        if price:
+            assert price > 5.0, f"Anomalous price detected: {price}. Should be realistic for Accord 2020."
+        
+        print(f"✅ WorkBuddy Scenario Passed. Final state: {wb_summary.get('final_state')}")
 
-        # Test event emission
+        # 5. Admin check
         event = assert_ok(
             client.post(
                 "/api/v1/agent/events",

@@ -86,6 +86,17 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+@app.middleware("http")
+async def add_utf8_charset(request: Request, call_next):
+    """
+    强制所有 JSON 响应使用 UTF-8 编码，防止中文乱码。
+    """
+    response = await call_next(request)
+    content_type = response.headers.get("Content-Type", "")
+    if "application/json" in content_type and "charset" not in content_type:
+        response.headers["Content-Type"] = f"{content_type}; charset=utf-8"
+    return response
+
 
 @app.on_event("startup")
 async def startup_event() -> None:
@@ -217,24 +228,26 @@ def _calculate_offer_price(car: CarMemory, config: Dict[str, Any], round_index: 
     market_avg = market_ref["market_avg"]
     display_price = float(car.price or 0)
     
-    # 锚点：取挂牌价和评估价的较小值
-    anchor_price = min(display_price, market_avg)
+    # 锚点优化：不再简单取小值，而是取挂牌价和评估价的加权平均，避免买家出价过低
+    # 如果挂牌价远高于评估价，买家会倾向于评估价；如果挂牌价接近评估价，买家会参考挂牌价。
+    anchor_price = (display_price * 0.4) + (market_avg * 0.6)
     
     # 溢价系数：挂牌价相对于市场均价的溢价程度
     premium_ratio = display_price / market_avg if market_avg > 0 else 1.0
     
     # 初始折扣
-    if premium_ratio > 1.1:
-        initial_discount = 0.90
+    if premium_ratio > 1.2:
+        initial_discount = 0.85 # 溢价太高，砍价狠
     elif premium_ratio < 0.95:
-        initial_discount = 0.97
+        initial_discount = 0.98 # 挂牌价已低，诚意还价
     else:
-        initial_discount = 0.93
+        initial_discount = 0.92 # 正常议价
 
     target_price = config.get("buyer_target_price")
     budget_max = config.get("buyer_budget_max")
 
     if target_price:
+        # 如果用户明确了目标价，以目标价为基准
         base_offer = float(target_price)
     else:
         base_offer = anchor_price * initial_discount
@@ -255,7 +268,12 @@ def _calculate_offer_price(car: CarMemory, config: Dict[str, Any], round_index: 
     
     if budget_max:
         offer = min(offer, float(budget_max))
-    return round(min(offer, display_price), 2)
+    
+    # 最后兜底：出价不能低于挂牌价的 50%（除非挂牌价本身极高），防止 2.88 这种离谱报价
+    floor_limit = display_price * 0.5
+    final_offer = max(offer, floor_limit)
+    
+    return round(min(final_offer, display_price), 2)
 
 
 def _is_deal_ready(car: CarMemory, proposed_price: float, seller_content: str) -> bool:
@@ -1013,8 +1031,16 @@ async def run_agent_session(
 
     final_state = "in_progress"
     agreed_price = None
+    import time
+    start_time = time.time()
+    max_duration = 25.0
 
     for round_index in range(1, max_rounds + 1):
+        if time.time() - start_time > max_duration:
+            print(f"⚠️ Session {session_id} reaching timeout, stopping at round {round_index}")
+            final_state = "needs_human_review"
+            break
+        
         buyer_prompt = (
             f"卖家上一轮回复：{seller_content}\n"
             f"车辆挂牌价 {car.price} 万元。买家目标：{config.get('buyer_goal')}。"
