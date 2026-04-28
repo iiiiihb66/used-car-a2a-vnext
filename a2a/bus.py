@@ -211,6 +211,21 @@ class A2ABus:
             if not message.session_id:
                 message.session_id = f"sess_{message.from_user_id}_{message.to_user_id}_{int(datetime.utcnow().timestamp())}"
             
+            # 生成默认文本内容（如果 payload 中没有 content）
+            content = message.payload.get("content")
+            if not content:
+                from a2a.message import Intent
+                if message.intent == Intent.PRICE_INQUIRY.value:
+                    content = message.payload.get("message") or "我想咨询这台车的情况。"
+                elif message.intent == Intent.PRICE_NEGOTIATE.value:
+                    price = message.payload.get("proposed_price")
+                    content = f"我的报价是 {price} 万元。" if price else "我想就价格进行商量。"
+                elif message.intent == Intent.DEAL_INTENT.value:
+                    price = message.payload.get("agreed_price")
+                    content = f"我确认以 {price} 万元成交。" if price else "我确认达成交易意向。"
+                elif message.intent == Intent.SELL_LISTING.value:
+                    content = "我上架了一台新车。"
+            
             # 保存到数据库
             conversation = Conversation(
                 message_id=message.id,
@@ -221,13 +236,13 @@ class A2ABus:
                 intent=message.intent,
                 action=message.action,
                 payload=message.payload,
-                content=message.payload.get("content"),
+                content=content,
                 related_car_id=message.related_car_id,
                 session_id=message.session_id,
                 parent_message_id=message.parent_message_id,
-                status=message.status
+                status=message.status,
+                is_system=1 if message.is_system else 0
             )
-            
             self._db_session.add(conversation)
             self._db_session.commit()
             
@@ -597,7 +612,7 @@ class A2ABus:
         )
         
         # 保存到数据库
-        await self._save_conversation(message)
+        await self._save_to_history(message)
         
         return {
             "success": True,

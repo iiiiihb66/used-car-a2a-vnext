@@ -347,14 +347,14 @@ class UserAgent:
             response: 响应内容
         """
         try:
-            # 记录对话
-            self.memory.add_conversation(
-                from_user_id=msg.from_user_id,
-                to_user_id=self.user_id,
-                intent=msg.intent,
-                payload=msg.payload,
-                response=response.get("content", "")
-            )
+            # 记录对话 (已由 A2ABus 处理，此处注释掉以避免重复)
+            # self.memory.add_conversation(
+            #     from_user_id=msg.from_user_id,
+            #     to_user_id=self.user_id,
+            #     intent=msg.intent,
+            #     payload=msg.payload,
+            #     response=response.get("content", "")
+            # )
             
             # 如果是议价消息，记录议价历史
             if msg.intent == Intent.PRICE_NEGOTIATE.value and msg.related_car_id:

@@ -144,6 +144,11 @@ backups/cloud_sqlite_20260427_134603.db (最新，部署前备份)
 
 ## 当前部署策略
 
+7. **Orchestration & 隐私优化 (2026-04-28)**:
+   - **防止指令泄露**: 在 `A2AMessage` 和 `Conversation` 中引入 `is_system` 标识，自动隐藏调度器 Prompt 及其回复。
+   - **消除重复记录**: 修复了 `UserAgent` 和 `A2ABus` 之间的冗余存储逻辑，解决了对话历史翻倍的问题。
+   - **议价逻辑优化**: 精简 `_is_deal_ready` 关键词匹配，排除了“促成交易”等语义误伤，提升了自动撮合的准确性。
+
 CloudBase 环境：
 
 ```text

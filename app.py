@@ -262,10 +262,16 @@ def _is_deal_ready(car: CarMemory, proposed_price: float, seller_content: str) -
     # 价格达成一致：出价达到目标价的 98% 以上
     accepted_by_price = bool(target_price and proposed_price >= target_price * 0.98)
     # 语义判断：卖家表达了接受意向
+    # 增加边界检查和更精确的词组，避免匹配“促成交易”
     accepted_by_text = any(
         keyword in seller_content
-        for keyword in ["可以接受", "同意成交", "成交", "接受这个价格", "价格可以", "没问题", "确定"]
+        for keyword in ["可以接受", "同意成交", "接受这个价格", "价格可以", "成交！", "没问题", "确定可以"]
     )
+    # 排除“促成交易”、“成交价”等模糊词义
+    if "促成交易" in seller_content and not accepted_by_price:
+        if not any(k in seller_content for k in ["可以接受", "成交！"]):
+             accepted_by_text = False
+             
     return accepted_by_price or accepted_by_text
 
 
@@ -1017,6 +1023,7 @@ async def run_agent_session(
             content=buyer_prompt,
         )
         buyer_message.session_id = session_id
+        buyer_message.is_system = True  # 标记为系统消息，不公开展示
         buyer_result = await bus.send(buyer_message)
         buyer_content = _agent_response_content(buyer_result)
 
@@ -1089,6 +1096,7 @@ async def run_agent_session(
                 content=confirm_prompt,
             )
             confirm_message.session_id = session_id
+            confirm_message.is_system = True  # 确认指令也是系统生成的
             confirm_result = await bus.send(confirm_message)
             confirm_content = _agent_response_content(confirm_result)
             

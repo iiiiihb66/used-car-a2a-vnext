@@ -88,6 +88,8 @@ class A2AMessage:
     
     # 消息状态
     status: str = "pending"
+    # 是否为系统内部消息（不展示在公开对话流中）
+    is_system: bool = False
     # 错误信息
     error: Optional[str] = None
     
@@ -112,7 +114,8 @@ class A2AMessage:
             payload=payload or {},
             related_car_id=self.related_car_id,
             session_id=self.session_id,
-            parent_message_id=self.id
+            parent_message_id=self.id,
+            is_system=self.is_system
         )
 
 

@@ -18,6 +18,8 @@ rsync -a "$PROJECT_ROOT/" "$DEPLOY_DIR/" \
   --exclude '.env.*' \
   --exclude 'cloudbaserc.json' \
   --exclude 'data/*.db' \
+  --exclude 'backups/' \
+  --exclude 'scratch/' \
   --exclude '__pycache__/' \
   --exclude '*.pyc' \
   --exclude '.pytest_cache/'
