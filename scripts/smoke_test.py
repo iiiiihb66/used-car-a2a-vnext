@@ -140,9 +140,24 @@ def main() -> None:
         assert len(run["data"]["turns"]) >= 2, run["data"]
 
         detail = assert_ok(client.get(f"/api/v1/agent/sessions/{session_id}"), "get agent session")
+        # 验证是否过滤了内部指令 (is_system=1)
+        # 4 轮正常对话应该保留
         assert len(detail["data"]["conversations"]) >= 4, detail["data"]
+        
+        for conv in detail["data"]["conversations"]:
+            content = conv.get("content", "")
+            # 关键词黑名单：不应出现任何调度器/Agent 指令
+            blacklist = ["请作为买家 Agent", "请作为卖家 Agent", "判断是否继续议价", "调度器"]
+            for word in blacklist:
+                assert word not in content, f"Leakage detected: {word} found in public conversation: {content}"
+        
+        # 验证 events 是否已脱敏 (不包含 input_snapshot/output_snapshot)
         assert len(detail["data"]["events"]) >= 3, detail["data"]
-        print("✅ Agent session run and verification passed")
+        for event in detail["data"]["events"]:
+            assert "input_snapshot" not in event or event["input_snapshot"] == {}, f"Leakage detected: input_snapshot found in public events: {event}"
+            assert "output_snapshot" not in event or event["output_snapshot"] == {}, f"Leakage detected: output_snapshot found in public events: {event}"
+            
+        print("✅ Agent session run and verification passed (Privacy Filter OK)")
 
         backup = client.get(
             "/api/v1/admin/database/backup",

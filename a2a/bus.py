@@ -451,7 +451,8 @@ class A2ABus:
         user_id: int,
         other_user_id: int = None,
         session_id: str = None,
-        limit: int = 50
+        limit: int = 50,
+        include_system: bool = False
     ) -> List[Dict]:
         """
         获取对话历史
@@ -461,6 +462,7 @@ class A2ABus:
             other_user_id: 对方用户 ID（可选）
             session_id: 会话 ID（可选）
             limit: 返回数量限制
+            include_system: 是否包含系统/调度消息
         
         Returns:
             对话历史列表
@@ -469,6 +471,10 @@ class A2ABus:
             return []
         
         query = self._db_session.query(Conversation)
+        
+        # 默认只返回用户可见对话
+        if not include_system:
+            query = query.filter(Conversation.is_system == 0)
         
         if session_id:
             query = query.filter(Conversation.session_id == session_id)

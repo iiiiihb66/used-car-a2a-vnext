@@ -1177,25 +1177,39 @@ async def get_agent_session(
     db=Depends(get_db),
 ) -> Dict[str, Any]:
     config = _get_agent_session_config(db, session_id)
+    
+    # 默认只返回用户可见对话 (is_system=0)
     conversations = (
         db.query(Conversation)
         .filter(Conversation.session_id == session_id)
+        .filter(Conversation.is_system == 0)
         .order_by(Conversation.created_at.asc())
         .all()
     )
+    
+    # 获取事件并脱敏（移除包含内部 Prompt 的快照）
     events = (
         db.query(AgentEvent)
         .filter(AgentEvent.related_conversation_id == session_id)
         .order_by(AgentEvent.id.asc())
         .all()
     )
+    
+    safe_events = []
+    for e in events:
+        ed = e.to_dict()
+        # 外部接口移除内部调度 Prompt 快照，仅保留观察摘要
+        ed.pop("input_snapshot", None)
+        ed.pop("output_snapshot", None)
+        safe_events.append(ed)
+        
     return {
         "success": True,
         "data": {
             "session_id": session_id,
             "config": config,
             "conversations": [item.to_dict() for item in conversations],
-            "events": [item.to_dict() for item in events],
+            "events": safe_events,
         },
     }
 
