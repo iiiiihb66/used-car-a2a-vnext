@@ -149,8 +149,72 @@ def main():
 
         # Verify detail
         detail = assert_ok(client.get(f"/api/v1/agent/sessions/{session_id}"), "get agent session")
-        assert len(detail["data"]["conversations"]) >= 1, detail["data"]
-        print(f"Verified session details, {len(detail['data']['conversations'])} conversations found.")
+        data = detail["data"]
+        
+        # 1. 验证摘要持久化 (P0)
+        summary = data.get("summary")
+        assert summary is not None, "Online: Summary should be persisted in GET session"
+        assert summary["final_state"] in {"deal_ready", "deal_intent_created", "needs_human_review"}, summary
+        assert "agreed_price" in summary, "Online: agreed_price should be in summary"
+        assert "rounds" in summary, "Online: rounds should be in summary"
+        
+        # 2. 验证是否过滤了内部指令 (is_system=1)
+        conversations = data["conversations"]
+        events = data["events"]
+        assert len(conversations) >= 2, data
+        
+        for conv in conversations:
+            content = conv.get("content", "")
+            assert content != "", "Content should not be empty"
+            blacklist = ["请作为买家 Agent", "请作为卖家 Agent", "判断是否继续议价", "调度器"]
+            for word in blacklist:
+                assert word not in content, f"Leakage detected online: {word} found in public conversation: {content}"
+        
+        # 3. 验证 events 是否已脱敏
+        for event in events:
+            assert "input_snapshot" not in event or event["input_snapshot"] == {}, f"Leakage online: input_snapshot"
+            assert "output_snapshot" not in event or event["output_snapshot"] == {}, f"Leakage online: output_snapshot"
+            
+        print(f"✅ Verified session details: state={summary['final_state']}, price={summary.get('agreed_price')}")
+
+        # 4. 专项测试：底价保护 (target_price = 13.3)
+        print("🚀 Running specialized Floor Price Protection Test (13.3万)...")
+        # 创建车源，底价 13.3 万
+        floor_car = assert_ok(client.post("/api/v1/cars", json={
+            "brand": "奔驰",
+            "model": "C级",
+            "year": 2022,
+            "mileage": 1.5,
+            "price": 15.0,
+            "target_price": 13.3, # 这里的底价是 13.3
+            "owner_id": seller_id
+        }), "create floor car")
+        floor_car_id = floor_car["id"]
+        
+        # 创建 Session，让买家尝试以低于 13.3 万的价格成交
+        floor_session = assert_ok(client.post("/api/v1/agent/sessions", json={
+            "buyer_id": buyer_id,
+            "seller_id": seller_id,
+            "car_id": floor_car_id,
+            "config": {
+                "buyer_target_price": 12.0, # 买家目标 12 万，低于底价 13.3
+                "buyer_budget_max": 13.0,   # 买家预算最高 13 万，仍然低于底价 13.3
+                "max_rounds": 2
+            }
+        }), "create floor session")
+        floor_session_id = floor_session["session_id"]
+        
+        # 运行 Session
+        with httpx.Client(base_url=base_url, timeout=120.0) as run_client:
+             assert_ok(run_client.post(f"/api/v1/agent/sessions/{floor_session_id}/run"), "run floor session")
+             
+        # 验证最终结果
+        floor_detail = assert_ok(client.get(f"/api/v1/agent/sessions/{floor_session_id}"), "get floor session")
+        floor_summary = floor_detail["data"].get("summary")
+        print(f"✅ Floor Test Completed. Final state: {floor_summary['final_state']}, Price: {floor_summary.get('agreed_price')}")
+        
+        assert floor_summary["final_state"] not in {"deal_ready", "deal_intent_created"}, "ERROR: Deal reached below floor price!"
+        assert floor_summary.get("agreed_price") is None or floor_summary["agreed_price"] >= 13.3, "ERROR: Agreed price below target_price!"
 
         # Test event emission
         event = assert_ok(

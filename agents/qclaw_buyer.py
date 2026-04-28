@@ -104,6 +104,32 @@ class QclawBuyer(UserAgent):
         
         return round(final_offer, 2)
 
+    async def get_prompt(self, msg: Optional[Any], context: Dict[str, Any]) -> str:
+        """针对 Qclaw 增强的 Prompt，强化评估价引用"""
+        # 获取基本 Prompt
+        base_prompt = await super().get_prompt(msg, context)
+        
+        # 获取评估价信息
+        car_info = context.get("car_info", {})
+        market_ref = PriceEvaluator.get_market_reference(
+            car_info.get("brand", ""),
+            car_info.get("model", ""),
+            car_info.get("year", 2020),
+            car_info.get("mileage", 0)
+        )
+        market_avg = market_ref["market_avg"]
+        display_price = car_info.get("price", 0)
+        
+        # 注入 Qclaw 专用策略指令
+        strategy_prompt = f"""
+## Qclaw 议价策略 (P2 增强)
+- 平台评估价: {market_avg} 万
+- 挂牌价: {display_price} 万
+- 指令：在议价回复中，请务必明确引用平台评估价。例如：“平台评估价约 {market_avg} 万，当前挂牌价 {display_price} 万，因此本轮出价为 X 万。”
+- 逻辑：通过评估价与挂牌价的差距来支撑你的还价合理性。
+"""
+        return base_prompt + strategy_prompt
+
     def match_brands(self, brands: List[str], inventory: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """批量品牌匹配"""
         return [car for car in inventory if car.get("brand") in brands]

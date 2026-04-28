@@ -172,6 +172,18 @@ used-car-a2a-vnext
 3. CloudBase 云托管实例数保持为 1。
 4. 部署前后执行 `python scripts/cloud_sqlite_backup.py download --output-dir ./backups`。
 
+10. **Session 状态持久化与价格一致性修复 (2026-04-28)**:
+    - **回归发现**: 
+        a. `GET session` 接口缺少 `summary`（成交价、状态、轮次等），导致外部 Agent 无法闭环查询。
+        b. 最终成交确认消息未进入 `conversations` 历史，用户回看时看不到成交动作。
+        c. `agreed_price` 存在与底价冲突或与对话报价不一致的情况。
+    - **修复策略**: 
+        a. 增强 `GET /api/v1/agent/sessions/{session_id}`，自动从 `auto_session_completed` 事件中提取并返回 `summary` 和 `turns`。
+        b. 在 `run_agent_session` 中显式写入成交确认消息到对话表（`is_system=0`）。
+        c. 强化底价保护逻辑，确保 `agreed_price >= car.target_price` 且与对话最后出价一致。
+        d. 优化 `Qclaw-buyer` 逻辑，在议价时主动引用平台评估价。
+    - **技术约束**: 维持单实例 SQLite-first MVP。
+
 重要限制：
 
 1. SQLite 适合 MVP 单实例验证。

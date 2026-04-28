@@ -51,6 +51,7 @@ from utils.price_tools import PriceEvaluator, ConditionTemplate
 
 APP_TITLE = "二手车 A2A 档案协商工具"
 APP_VERSION = "0.1.0"
+PLATFORM_ADMIN_ID = 0 # 平台系统用户 ID
 PUBLIC_BASE_URL = os.getenv(
     "PUBLIC_BASE_URL",
     "https://used-car-a2a-vnext-249890-8-1407936127.sh.run.tcloudbase.com",
@@ -259,10 +260,11 @@ def _calculate_offer_price(car: CarMemory, config: Dict[str, Any], round_index: 
 
 def _is_deal_ready(car: CarMemory, proposed_price: float, seller_content: str) -> bool:
     target_price = float(car.target_price or car.price or 0)
-    # 价格达成一致：出价达到目标价的 98% 以上
-    accepted_by_price = bool(target_price and proposed_price >= target_price * 0.98)
+    # 底价保护：agreed_price 不得低于 car.target_price
+    # 价格达成一致：出价达到或超过目标价
+    accepted_by_price = bool(target_price and proposed_price >= target_price)
+    
     # 语义判断：卖家表达了接受意向
-    # 增加边界检查和更精确的词组，避免匹配“促成交易”
     accepted_by_text = any(
         keyword in seller_content
         for keyword in ["可以接受", "同意成交", "接受这个价格", "价格可以", "成交！", "没问题", "确定可以"]
@@ -272,7 +274,8 @@ def _is_deal_ready(car: CarMemory, proposed_price: float, seller_content: str) -
         if not any(k in seller_content for k in ["可以接受", "成交！"]):
              accepted_by_text = False
              
-    return accepted_by_price or accepted_by_text
+    # 只有当出价达到底价且卖家语义同意时，才判定为 deal_ready
+    return accepted_by_price and accepted_by_text
 
 
 class UserCreate(BaseModel):
@@ -1103,17 +1106,36 @@ async def run_agent_session(
             # 判断买家是否最终确认
             buyer_confirmed = "确认接受" in confirm_content or "没问题" in confirm_content
             
-            turn["confirmation"] = confirm_content
-            turn["buyer_confirmed"] = buyer_confirmed
-            
+            # 保存成交确认消息到 conversations，确保用户可见
+            confirmation_message = MessageBuilder.create_message(
+                from_user_id=buyer_id,
+                to_user_id=seller_id,
+                content=confirm_content,
+            )
+            confirmation_message.session_id = session_id
+            confirmation_message.is_system = False  # 标记为非系统消息，用户可见
+            await bus.send(confirmation_message)
+
             if buyer_confirmed:
                 final_state = "deal_ready"
                 agreed_price = proposed_price
+                
+                # 记录最终成交系统消息
+                success_text = f"【系统确认】双方已达成成交意向，最终协商价格为 {agreed_price} 万元。"
+                success_message = MessageBuilder.create_message(
+                    from_user_id=PLATFORM_ADMIN_ID,
+                    to_user_id=buyer_id,
+                    content=success_text,
+                )
+                success_message.session_id = session_id
+                success_message.is_system = False
+                await bus.send(success_message)
             else:
-                # 如果买家反悔或需要进一步确认，继续对话（但通常在 deal_ready 后不会反悔，这里作为保护逻辑）
+                # 如果买家反悔或需要进一步确认，继续对话
                 final_state = "in_progress"
                 observation = "买家在最后确认环节表示犹豫，未达成最终一致。"
-            if auto_deal:
+            
+            if buyer_confirmed and auto_deal:
                 deal_message = MessageBuilder.create_deal_intent(
                     from_user_id=buyer_id,
                     to_user_id=seller_id,
@@ -1187,6 +1209,19 @@ async def get_agent_session(
         .all()
     )
     
+    # 获取会话摘要（从 auto_session_completed 事件中提取）
+    completed_event = (
+        db.query(AgentEvent)
+        .filter(
+            AgentEvent.event_type == "auto_session_completed",
+            AgentEvent.related_conversation_id == session_id,
+        )
+        .order_by(AgentEvent.id.desc())
+        .first()
+    )
+    
+    summary = completed_event.output_snapshot.get("summary") if completed_event else None
+    
     # 获取事件并脱敏（移除包含内部 Prompt 的快照）
     events = (
         db.query(AgentEvent)
@@ -1208,6 +1243,7 @@ async def get_agent_session(
         "data": {
             "session_id": session_id,
             "config": config,
+            "summary": summary,
             "conversations": [item.to_dict() for item in conversations],
             "events": safe_events,
         },
