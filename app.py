@@ -1042,9 +1042,10 @@ async def run_agent_session(
 
     final_state = "in_progress"
     agreed_price = None
+    review_reason = None
     import time
     start_time = time.time()
-    max_duration = 25.0
+    max_duration = 20.0
 
     for round_index in range(1, max_rounds + 1):
         if time.time() - start_time > max_duration:
@@ -1117,8 +1118,9 @@ async def run_agent_session(
             "type": "negotiate",
             "buyer_reflection": buyer_content,
             "proposed_price": proposed_price,
-            "seller_response": seller_content,
-            "deal_ready": deal_ready,
+            "buyer_confirmed": buyer_confirmed if 'buyer_confirmed' in locals() else False,
+            "seller_confirmed": deal_ready,
+            "review_reason": review_reason,
             "buyer_result": buyer_result,
             "seller_result": negotiate_result,
         }
@@ -1214,6 +1216,8 @@ async def run_agent_session(
 
     if final_state == "in_progress":
         final_state = "needs_human_review"
+        if not review_reason:
+            review_reason = "game_theory_deadlock"
 
     summary = {
         "session_id": session_id,
@@ -1226,6 +1230,7 @@ async def run_agent_session(
             if final_state in {"deal_ready", "deal_intent_created"}
             else "建议补充车况档案或调整预算后继续"
         ),
+        "review_reason": review_reason,
     }
 
     _record_agent_event(
