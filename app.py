@@ -23,7 +23,7 @@ from uuid import uuid4
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, PlainTextResponse
+from fastapi.responses import FileResponse, PlainTextResponse, JSONResponse
 from pydantic import BaseModel, Field
 from starlette.background import BackgroundTask
 
@@ -1071,6 +1071,29 @@ async def run_agent_session(
         buyer_content = _agent_response_content(buyer_result)
 
         proposed_price = _calculate_offer_price(car, config, round_index)
+        
+        # 2. 理性拦截 (P0): 如果出价低于挂牌价的 75%，视为非理性低价，拦截并不发送
+        # 这种离谱低价通常是由于数据异常（如年份或品牌评估偏差）导致的，直接发送会损害平台信誉
+        rational_floor = car.price * 0.75
+        if proposed_price < rational_floor:
+            _record_agent_event(
+                db,
+                actor_agent="platform-orchestrator",
+                actor_role="platform",
+                event_type="buyer_offer_irrational_intercepted",
+                status="warning",
+                user_id=buyer_id,
+                related_car_id=car_id,
+                related_conversation_id=session_id,
+                input_snapshot={"proposed_price": proposed_price, "rational_floor": rational_floor},
+                observation=f"买家 Agent 报价 {proposed_price} 万，显著低于合理下限 {rational_floor} 万，已拦截并自动转入人工复核。",
+            )
+            final_state = "needs_human_review"
+            observation = f"协商中断：买家出价 {proposed_price} 万过低，已拦截。"
+            # 为了 summary 能够重建原因
+            db.query(AgentEvent).filter(AgentEvent.related_conversation_id == session_id).order_by(AgentEvent.id.desc()).first().score = -1.0 
+            break
+
         negotiate_reason = (
             f"第 {round_index} 轮自动议价。买家预算/目标："
             f"{config.get('buyer_budget_min') or '未设'}-{config.get('buyer_budget_max') or '未设'} 万，"
@@ -1263,6 +1286,8 @@ async def get_agent_session(
     summary = None
     if completed_event:
         summary = completed_event.output_snapshot.get("summary")
+        if summary and not summary.get("review_reason") and completed_event.status == "failed":
+            summary["review_reason"] = "execution_error_or_timeout"
     
     if not summary:
         # 如果完成事件缺失（可能是超时或正在进行中），尝试从过程事件中重建摘要 (P0)
@@ -1278,13 +1303,20 @@ async def get_agent_session(
         if latest_round_event:
             out = latest_round_event.output_snapshot or {}
             inp = latest_round_event.input_snapshot or {}
+            reason = "协商正在进行或因超时转入人工复核"
+            if latest_round_event.score == -1.0:
+                 reason = "买家报价过低，已拦截请求人工介入"
+            elif latest_round_event.score == 0.0:
+                 reason = "Agent 响应超时，转入人工复核"
+
             summary = {
                 "session_id": session_id,
                 "final_state": "running_or_timeout",
                 "agreed_price": None,
                 "rounds": inp.get("round", 0),
                 "latest_seller_response": out.get("seller_response", "正在等待回复..."),
-                "next_step": "协商正在进行或因超时转入人工复核",
+                "next_step": "协商已转入人工复核",
+                "review_reason": reason,
                 "is_progressive": True
             }
         else:
@@ -1315,16 +1347,16 @@ async def get_agent_session(
         ed.pop("output_snapshot", None)
         safe_events.append(ed)
         
-    return {
-        "success": True,
-        "data": {
+    return JSONResponse(
+        content={"success": True, "data": {
             "session_id": session_id,
             "config": config,
-            "summary": summary,
-            "conversations": [item.to_dict() for item in conversations],
+            "conversations": [c.to_dict() for c in conversations],
             "events": safe_events,
-        },
-    }
+            "summary": summary,
+        }},
+        headers={"Content-Type": "application/json; charset=utf-8"}
+    )
 
 
 @app.get("/api/v1/conversations/{user_id}")
@@ -1445,6 +1477,7 @@ async def list_agent_events(
     actor_role: Optional[str] = Query(None),
     event_type: Optional[str] = Query(None),
     status: Optional[str] = Query(None),
+    related_conversation_id: Optional[str] = Query(None),
     limit: int = Query(50, ge=1, le=200),
     db=Depends(get_db),
     _: None = Depends(require_admin_token),
@@ -1456,6 +1489,8 @@ async def list_agent_events(
         query = query.filter(AgentEvent.event_type == event_type)
     if status:
         query = query.filter(AgentEvent.status == status)
+    if related_conversation_id:
+        query = query.filter(AgentEvent.related_conversation_id == related_conversation_id)
 
     events = query.order_by(AgentEvent.created_at.desc()).limit(limit).all()
     return {"success": True, "total": len(events), "data": [event.to_dict() for event in events]}

@@ -179,20 +179,20 @@ backups/cloud_sqlite_20260427_134603.db (最新，部署前备份)
 ## 最终验收冲突复核 (2026-04-29)
 
 发现 Qclaw 与 WorkBuddy 结果不一致：
-1. **WorkBuddy Summary = null**: 原因是 `/run` 在 CloudRun 超时 (30s) 后被切断，导致 `auto_session_completed` 事件未能及时写入，`GET session` 逻辑因找不到完成事件而返回 null。
-2. **价格异常 (69000)**: 确认由于 `CarCreate` 输入单位为“元” (138000) 而非“万元”，导致 `floor_limit` 计算为 69000，触发了错误的兜底逻辑。
-3. **中文乱码**: 平台 API 原始响应确认为 UTF-8 + charset=utf-8，乱码来源于外部客户端解析环境。
+1. **WorkBuddy 报价异常 (7.24/7.45万)**: 复核 session `auto_20260429031044_2f8e9d54` 发现，对于 13.8万雅阁，买家报价 7.24/7.45万。经推算，该数值与系统在 `year=0` 时的计算结果完全吻合，说明评估逻辑触发了残值兜底，且缺乏对挂牌价的合理性约束。
+2. **中文乱码争议**: 经 `curl -i` 与 `requests` 直接核验，平台 API 返回的原始 JSON 字符完全正常且包含 `charset=utf-8`。乱码确认为客户端（WorkBuddy）解析环境问题。
+3. **Summary 理由缺失**: 即使进入 `needs_human_review`，用户也无法得知是价格分歧过大还是超时拦截。
 
 ## 修复策略
 
-1. **Progressive Summary (P0)**: 改进 `GET session` 逻辑，在缺失完成事件时，自动从过程事件中重建“进行中”或“已超时”的摘要，确保 `summary` 永不为 null。
-2. **价格单位归一化 (P0)**: 在车辆创建环节增加自动识别：若 `price > 1000` 则自动除以 10000 转换为“万元”。
-3. **运行时间保护 (P0)**: 进一步收紧同步 `/run` 的耗时上限，并增加子任务超时控制，防止客户端 504。
-4. **回归验证**: `online_smoke_test.py` 必须同时覆盖 Qclaw 和 WorkBuddy 场景。
+1. **Rationality Interceptor (P0)**: 增加出价合理性拦截。若买家出价低于挂牌价的 75%（或其他合理比例），系统将拦截报价，不发送给卖家，直接转入 `needs_human_review`。
+2. **Detailed Review Reason (P1)**: 在 `summary` 中增加 `review_reason`，明确告知用户为何需要人工介入（如：报价低于合理下限、博弈陷入僵局、评估价差异巨大等）。
+3. **Explicit Encoding Header (P1)**: 在核心响应中强制显式声明 `charset=utf-8`，降低客户端误读概率。
+4. **Admin API Debugging (P1)**: 为 `agent-events` 增加 `related_conversation_id` 过滤，方便 P0 问题的线上排查。
 
 ## 当前 GitHub 与线上状态
 
-GitHub 提交: `54aa858` (fix: resolve P0 encoding, price anomalies, and 504 timeouts)
+GitHub 提交: `690ccf5` (fix: resolve WorkBuddy discrepancies)
 
 线上服务：
 - `used-car-a2a-vnext`
@@ -237,7 +237,7 @@ used-car-a2a-vnext
 
 ## 下一步优先级
 
-1. **观察真实 Agent 接入**: 继续使用 `MVP_AGENT_TEST_PROMPTS.md` 引导其他 Agent (如 Qclaw) 接入并记录 events。
+1. **观察 WorkBuddy 与 Qclaw 协同稳定性**: 在生产环境持续观察两类 Agent 的博弈质量。
 2. **复盘数据导出**: 增强 `/api/v1/admin/growth/reviews` 的导出功能，方便离线分析 Agent 博弈质量。
 3. **冷启动优化**: 考虑增加预热请求或优化 `app.py` 启动耗时，减少 CloudRun 503 发生概率。
 4. **性能监控**: 收集并展示 `/api/v1/agent/events` 中的时延数据。
