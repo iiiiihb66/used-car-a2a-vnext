@@ -192,7 +192,7 @@ backups/cloud_sqlite_20260427_134603.db (最新，部署前备份)
 
 ## 当前 GitHub 与线上状态
 
-GitHub 提交: `690ccf5` (fix: resolve WorkBuddy discrepancies)
+GitHub 提交: `3a38236` (fix: ensure review_reason persistence and robust smoke testing)
 
 线上服务：
 - `used-car-a2a-vnext`
