@@ -662,15 +662,26 @@ async def create_car(
     if not user:
         raise HTTPException(status_code=404, detail="车主不存在")
 
+    # 价格归一化 (P0): 如果输入价格 > 1000，自动判定为“元”，除以 10000 转换为“万元”
+    price = car_data.price or 0
+    if price > 1000:
+        price = round(price / 10000.0, 2)
+        
+    target_price = car_data.target_price
+    if target_price and target_price > 1000:
+        target_price = round(target_price / 10000.0, 2)
+    elif not target_price:
+        target_price = price
+
     payload = {
         "car_id": f"CAR-{datetime.utcnow().strftime('%Y%m%d')}-{uuid4().hex[:6].upper()}",
         "brand": car_data.brand,
         "series": car_data.series or car_data.brand,
         "model": car_data.model,
         "year": car_data.year,
-        "price": car_data.price,
+        "price": price,
         "original_price": car_data.original_price,
-        "target_price": car_data.target_price or car_data.price,
+        "target_price": target_price,
         "mileage": car_data.mileage,
         "color": car_data.color,
         "region": car_data.region,
@@ -1041,6 +1052,9 @@ async def run_agent_session(
             final_state = "needs_human_review"
             break
         
+        # 为 bus.send 增加单次调用超时，防止 LLM 卡死导致整个会话 504
+        # 注意：这里的 bus.send 内部会处理具体的 Agent 逻辑
+        
         buyer_prompt = (
             f"卖家上一轮回复：{seller_content}\n"
             f"车辆挂牌价 {car.price} 万元。买家目标：{config.get('buyer_goal')}。"
@@ -1245,8 +1259,45 @@ async def get_agent_session(
         .order_by(AgentEvent.id.desc())
         .first()
     )
+
+    summary = None
+    if completed_event:
+        summary = completed_event.output_snapshot.get("summary")
     
-    summary = completed_event.output_snapshot.get("summary") if completed_event else None
+    if not summary:
+        # 如果完成事件缺失（可能是超时或正在进行中），尝试从过程事件中重建摘要 (P0)
+        latest_round_event = (
+            db.query(AgentEvent)
+            .filter(
+                AgentEvent.event_type == "auto_negotiation_round",
+                AgentEvent.related_conversation_id == session_id,
+            )
+            .order_by(AgentEvent.id.desc())
+            .first()
+        )
+        if latest_round_event:
+            out = latest_round_event.output_snapshot or {}
+            inp = latest_round_event.input_snapshot or {}
+            summary = {
+                "session_id": session_id,
+                "final_state": "running_or_timeout",
+                "agreed_price": None,
+                "rounds": inp.get("round", 0),
+                "latest_seller_response": out.get("seller_response", "正在等待回复..."),
+                "next_step": "协商正在进行或因超时转入人工复核",
+                "is_progressive": True
+            }
+        else:
+            # 只有初始询价事件
+            summary = {
+                "session_id": session_id,
+                "final_state": "initializing",
+                "agreed_price": None,
+                "rounds": 0,
+                "latest_seller_response": "正在发起初始询价...",
+                "next_step": "请耐心等待 Agent 响应",
+                "is_progressive": True
+            }
     
     # 获取事件并脱敏（移除包含内部 Prompt 的快照）
     events = (

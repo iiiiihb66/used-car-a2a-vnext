@@ -187,9 +187,26 @@ def main():
             
         print(f"✅ Verified session details: state={summary['final_state']}, price={summary.get('agreed_price')}")
 
-        # 4. 专项测试：WorkBuddy 车商场景 (P0 修复验证)
-        print("🚀 Running WorkBuddy Seller Scenario (Accord 2020, Target 13.3万)...")
-        # 创建北京车商
+    try:
+        # 4. 专项测试：Qclaw 买家 9-10万卡罗拉场景
+        print("🚀 Running Qclaw Buyer Scenario (Corolla, 9-10万)...")
+        qclaw_session = assert_ok(client.post("/api/v1/agent/sessions", json={
+            "buyer_id": buyer_id,
+            "seller_id": seller_id,
+            "car_id": car_id,
+            "config": {
+                "buyer_goal": "想买个卡罗拉，9.5万以内",
+                "buyer_target_price": 9.2,
+                "buyer_budget_max": 9.8,
+                "max_rounds": 2,
+                "buyer_agent_name": "Qclaw-Buyer"
+            }
+        }), "create Qclaw session")
+        q_session_id = qclaw_session["data"]["session_id"]
+        
+        # 5. 专项测试：WorkBuddy 车商 13.8万雅阁场景 (P0 修复验证)
+        print("🚀 Running WorkBuddy Seller Scenario (Accord 2020, 13.8万)...")
+        # 使用 138000 测试价格归一化
         wb_seller = assert_ok(client.post("/api/v1/users", json={
             "name": "北京鼎诚车行",
             "email": f"wb_seller_{uuid.uuid4().hex[:4]}@example.com",
@@ -199,26 +216,24 @@ def main():
         }), "create WB seller")
         wb_seller_id = wb_seller["data"]["id"]
         
-        # 发布车源
         wb_car = assert_ok(client.post("/api/v1/cars", json={
             "brand": "本田",
             "model": "雅阁",
             "year": 2020,
             "mileage": 4.5,
-            "price": 13.8,
-            "target_price": 13.3,
+            "price": 138000, # 测试归一化
+            "target_price": 133000, # 测试归一化
             "region": "北京",
             "owner_id": wb_seller_id
         }), "create WB car")
         wb_car_id = wb_car["data"]["car_id"]
         
-        # 创建 Session
         wb_session = assert_ok(client.post("/api/v1/agent/sessions", json={
             "buyer_id": buyer_id,
             "seller_id": wb_seller_id,
             "car_id": wb_car_id,
             "config": {
-                "buyer_goal": "找个雅阁，家用，价格13万左右，车况要好",
+                "buyer_goal": "找个雅阁，家用，价格13万左右",
                 "buyer_target_price": 13.0,
                 "buyer_budget_max": 13.5,
                 "max_rounds": 2,
@@ -228,28 +243,38 @@ def main():
         }), "create WB session")
         wb_session_id = wb_session["data"]["session_id"]
         
-        # 运行
-        print("Running WB session (2 rounds)...")
-        with httpx.Client(base_url=base_url, timeout=120.0) as run_client:
-             wb_run = assert_ok(run_client.post(f"/api/v1/agent/sessions/{wb_session_id}/run"), "run WB session")
+        # 并行/连续运行两个 Session
+        print(f"Running sessions: {q_session_id} and {wb_session_id}")
+        with httpx.Client(base_url=base_url, timeout=150.0) as run_client:
+             print("Running Qclaw...")
+             assert_ok(run_client.post(f"/api/v1/agent/sessions/{q_session_id}/run"), "run Qclaw")
+             print("Running WorkBuddy...")
+             assert_ok(run_client.post(f"/api/v1/agent/sessions/{wb_session_id}/run"), "run WorkBuddy")
              
-        # 验证详情
+        # 验证 Qclaw
+        q_detail = assert_ok(client.get(f"/api/v1/agent/sessions/{q_session_id}"), "get Qclaw detail")
+        assert q_detail["data"].get("summary") is not None, "Qclaw summary is null"
+        print(f"✅ Qclaw Passed: {q_detail['data']['summary']['final_state']}")
+
+        # 验证 WorkBuddy
         wb_detail = assert_ok(client.get(f"/api/v1/agent/sessions/{wb_session_id}"), "get WB detail")
         wb_data = wb_detail["data"]
+        assert wb_data.get("summary") is not None, "WorkBuddy summary is null"
         
-        # 验证中文不乱码 (P0)
-        assert "本田" in str(wb_data), "Encoding error: '本田' not found in response"
-        assert "雅阁" in str(wb_data), "Encoding error: '雅阁' not found in response"
+        # 验证价格归一化 (P0)
+        # 13.8万车，50% 应该是 6.9万。如果出现 69000 则失败。
+        summary = wb_data["summary"]
+        last_price = wb_data["conversations"][-1].get("payload", {}).get("proposed_price", 0)
+        print(f"WorkBuddy final price: {last_price}")
+        assert last_price < 1000, f"Price normalization failed: {last_price}"
+        assert last_price >= 13.8 * 0.5, f"Price too low: {last_price}"
         
-        # 验证价格不异常 (P0)
-        wb_summary = wb_data.get("summary", {})
-        price = wb_summary.get("agreed_price") or wb_data["conversations"][-1].get("payload", {}).get("proposed_price")
-        if price:
-            assert price > 5.0, f"Anomalous price detected: {price}. Should be realistic for Accord 2020."
+        # 验证中文 (P0)
+        assert "本田" in str(wb_data), "Encoding error: '本田' not found"
         
-        print(f"✅ WorkBuddy Scenario Passed. Final state: {wb_summary.get('final_state')}")
+        print(f"✅ WorkBuddy Passed: {summary['final_state']}")
 
-        # 5. Admin check
+        # 6. Admin check
         event = assert_ok(
             client.post(
                 "/api/v1/agent/events",

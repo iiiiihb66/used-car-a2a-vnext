@@ -35,7 +35,9 @@ class PriceEvaluator:
             "长安": 10.0
         }
         
-        new_car_price = base_price_map.get(brand, 15.0)
+        # 归一化品牌名称（去除多余空格）
+        clean_brand = (brand or "").strip()
+        new_car_price = base_price_map.get(clean_brand, 15.0)
         
         # 折旧率计算：前三年每年12%，之后每年8%，每万公里额外折旧0.8%
         # 修正：降低折旧速率，使其更符合保值率高的车型

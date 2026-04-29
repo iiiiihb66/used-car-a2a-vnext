@@ -176,6 +176,20 @@ backups/cloud_sqlite_20260427_134603.db (最新，部署前备份)
     - 修正了由于价格异常导致的底价逻辑失效。
     - 在 `online_smoke_test.py` 中增加了 WorkBuddy 专项场景回归。
 
+## 最终验收冲突复核 (2026-04-29)
+
+发现 Qclaw 与 WorkBuddy 结果不一致：
+1. **WorkBuddy Summary = null**: 原因是 `/run` 在 CloudRun 超时 (30s) 后被切断，导致 `auto_session_completed` 事件未能及时写入，`GET session` 逻辑因找不到完成事件而返回 null。
+2. **价格异常 (69000)**: 确认由于 `CarCreate` 输入单位为“元” (138000) 而非“万元”，导致 `floor_limit` 计算为 69000，触发了错误的兜底逻辑。
+3. **中文乱码**: 平台 API 原始响应确认为 UTF-8 + charset=utf-8，乱码来源于外部客户端解析环境。
+
+## 修复策略
+
+1. **Progressive Summary (P0)**: 改进 `GET session` 逻辑，在缺失完成事件时，自动从过程事件中重建“进行中”或“已超时”的摘要，确保 `summary` 永不为 null。
+2. **价格单位归一化 (P0)**: 在车辆创建环节增加自动识别：若 `price > 1000` 则自动除以 10000 转换为“万元”。
+3. **运行时间保护 (P0)**: 进一步收紧同步 `/run` 的耗时上限，并增加子任务超时控制，防止客户端 504。
+4. **回归验证**: `online_smoke_test.py` 必须同时覆盖 Qclaw 和 WorkBuddy 场景。
+
 ## 当前 GitHub 与线上状态
 
 GitHub 提交: `54aa858` (fix: resolve P0 encoding, price anomalies, and 504 timeouts)
