@@ -320,6 +320,35 @@ class CarCreate(BaseModel):
     original_price: Optional[float] = Field(None, description="新车价")
     target_price: Optional[float] = Field(None, description="目标成交价")
     owner_id: Optional[int] = Field(None, description="车主用户ID（传此字段则忽略 Query 中的 user_id）")
+    report_url: Optional[str] = Field(None, description="检测报告链接")
+    image_urls: Optional[List[str]] = Field(None, description="图片链接列表")
+    attachments: Optional[Dict[str, Any]] = Field(None, description="其他附件信息")
+
+
+class AgentEventCreate(BaseModel):
+    actor_agent: str = Field(..., description="Agent 名称，如 Qclaw/WorkBuddy/platform-scheduler")
+    actor_role: str = Field(..., description="buyer/seller/platform/admin")
+    event_type: str = Field(..., description="事件类型，如 match_empty/car_published/inquiry_sent")
+    status: str = Field("observed", description="observed/succeeded/failed/pending")
+    user_id: Optional[int] = Field(None, description="关联用户")
+    related_user_id: Optional[int] = Field(None, description="关联对方用户")
+    related_car_id: Optional[str] = Field(None, description="关联车辆")
+    related_demand_id: Optional[str] = Field(None, description="关联需求")
+    related_conversation_id: Optional[str] = Field(None, description="关联会话")
+    input_snapshot: Optional[Dict[str, Any]] = Field(None, description="触发条件")
+    output_snapshot: Optional[Dict[str, Any]] = Field(None, description="响应内容")
+    score: Optional[float] = Field(None, description="评分/置信度")
+    observation: Optional[str] = Field(None, description="观察详情")
+
+
+class MatchStatusUpdate(BaseModel):
+    status: str = Field(..., description="new/interested/rejected/negotiating/deal_ready/failed")
+
+
+class MatchSessionRequest(BaseModel):
+    buyer_agent_name: str = Field("Qclaw-buyer", description="买家 Agent 名称")
+    seller_agent_name: str = Field("WorkBuddy-seller", description="卖家 Agent 名称")
+    max_rounds: int = Field(5, description="最大协商轮数")
 
 
 class LifecycleRecordCreate(BaseModel):
@@ -647,6 +676,83 @@ async def get_demand_matches(
     return result
 
 
+@app.patch("/api/v1/matches/{match_id}")
+async def update_match_status(
+    match_id: str,
+    status_data: MatchStatusUpdate,
+    db=Depends(get_db)
+) -> Dict[str, Any]:
+    memory = get_memory_service(db)
+    match_record = memory.update_match_status(match_id, status_data.status)
+    if not match_record:
+        raise HTTPException(status_code=404, detail="匹配记录不存在")
+    return {"success": True, "data": match_record}
+
+
+@app.post("/api/v1/matches/{match_id}/session")
+async def create_session_from_match(
+    match_id: str,
+    req: MatchSessionRequest,
+    db=Depends(get_db)
+) -> Dict[str, Any]:
+    memory = get_memory_service(db)
+    from models.match import MatchPool
+    match_record = db.query(MatchPool).filter(MatchPool.match_id == match_id).first()
+    if not match_record:
+        raise HTTPException(status_code=404, detail="匹配记录不存在")
+    
+    # 获取 Demand 和 Car
+    demand = match_record.demand
+    car = match_record.car
+    
+    if not demand or not car:
+        raise HTTPException(status_code=400, detail="关联数据不完整")
+        
+    # 构造 Session 创建请求
+    session_payload = {
+        "buyer_id": demand.user_id,
+        "seller_id": car.owner_id,
+        "car_id": car.car_id,
+        "buyer_goal": f"根据匹配建议({match_record.match_reason})发起协商",
+        "buyer_agent_name": req.buyer_agent_name,
+        "seller_agent_name": req.seller_agent_name,
+        "max_rounds": req.max_rounds,
+        "buyer_budget_max": demand.budget_max,
+        "buyer_target_price": demand.budget_min if demand.budget_min > 0 else None
+    }
+    
+    # 为了保持逻辑一致性，我们手动生成 session_id 并记录 auto_session_created
+    session_id = f"match_session_{match_id}"
+    
+    _record_agent_event(
+        db,
+        actor_agent="platform-orchestrator",
+        actor_role="platform",
+        event_type="auto_session_created",
+        status="succeeded",
+        user_id=demand.user_id,
+        related_user_id=car.owner_id,
+        related_car_id=car.car_id,
+        related_conversation_id=session_id,
+        input_snapshot=session_payload,
+        observation=f"基于匹配记录 {match_id} 启动自动协商"
+    )
+    
+    # 更新匹配状态
+    match_record.status = "negotiating"
+    match_record.session_id = session_id
+    db.commit()
+    
+    return {
+        "success": True, 
+        "data": {
+            "session_id": session_id,
+            "match_id": match_id,
+            "status": "negotiating"
+        }
+    }
+
+
 @app.post("/api/v1/cars")
 async def create_car(
     car_data: CarCreate,
@@ -691,6 +797,9 @@ async def create_car(
         "owner_id": actual_owner_id,
         "is_listed": True,
         "current_status": "上架中",
+        "report_url": car_data.report_url,
+        "image_urls": car_data.image_urls or [],
+        "attachments": car_data.attachments or {},
     }
     car = await memory.create_car_memory(payload)
     return {"success": True, "data": car}

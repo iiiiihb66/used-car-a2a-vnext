@@ -157,6 +157,21 @@ backups/cloud_sqlite_20260427_134603.db (最新，部署前备份)
     - **底价保护 (Floor Protection)**: 强化 `_is_deal_ready` 逻辑，确保 `agreed_price >= target_price`。
     - **Agent 优化**: `QclawBuyer` 现在会在 Prompt 中明确引用平台评估价。
 
+## Phase 2: Demand Pool & Match Engine (2026-04-30)
+
+1. **Model & API (Phase 2.1)**:
+    - **MatchPool**: 引入 `match_pool` 表，追踪需求与车源的匹配分 (`match_score`)、原因 (`match_reason`) 和状态 (`status`)。
+    - **CarMemory 增强**: 增加 `report_url` (检测报告)、`image_urls` (JSON 列表)、`attachments` (通用附件) 和 `import_batch_id`。
+    - **DemandPool 增强**: 增加 `last_match_at` 和 `match_count` 追踪匹配活跃度。
+    - **API 扩展**: 
+        - `PATCH /api/v1/matches/{match_id}`: 更新匹配意向状态。
+        - `POST /api/v1/matches/{match_id}/session`: 支持从匹配记录一键转入 A2A 自动协商，并自动填充预算和目标价约束。
+    - **验证状态**: 
+        - [x] 数据库 `match_pool` 表成功创建。
+        - [x] `CarMemory` 成功支持 `report_url` 等 Phase 2 字段的保存与下发。
+        - [x] `smoke_test.py` 回归通过，未破坏原有 A2A 协商链路。
+        - [x] `scratch/test_match_flow.py` 验证了从 Match 记录到 A2A Session 的全生命周期。
+
 ## P0 问题修复成果 (2026-04-29)
 
 1. **中文编码修复**:

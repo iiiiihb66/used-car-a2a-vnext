@@ -14,6 +14,7 @@ from models.car import CarMemory
 from models.conversation import Conversation
 from models.social_graph import SocialGraph
 from models.demand import DemandPool
+from models.match import MatchPool
 
 
 class MemoryService:
@@ -239,6 +240,10 @@ class MemoryService:
             image_descriptions=car_data.get("image_descriptions", []),
             is_listed=car_data.get("is_listed", True),
             current_status=car_data.get("current_status", "上架中"),
+            report_url=car_data.get("report_url"),
+            image_urls=car_data.get("image_urls", []),
+            attachments=car_data.get("attachments", {}),
+            import_batch_id=car_data.get("import_batch_id"),
             listed_at=datetime.utcnow()
         )
         
@@ -998,9 +1003,70 @@ class MemoryService:
             "success": True,
             "demand": demand.to_dict(),
             "total": len(matches),
-            "matches": matches,
-            "searched_at": datetime.utcnow().isoformat(),
+            "matches": sorted(matches, key=lambda x: x["match_score"], reverse=True)
         }
+
+    # ==================== 匹配操作 (Phase 2) ====================
+    
+    def create_match(
+        self,
+        demand_id: str,
+        car_id: str,
+        score: float,
+        reason: str = None
+    ) -> Dict[str, Any]:
+        """
+        创建匹配记录
+        """
+        from models.match import MatchPool
+        import os
+        from datetime import datetime
+        
+        match_id = f"match_{datetime.now().strftime('%Y%m%d%H%M%S')}_{os.urandom(4).hex()}"
+        match_record = MatchPool(
+            match_id=match_id,
+            demand_id=demand_id,
+            car_id=car_id,
+            match_score=score,
+            match_reason=reason,
+            status="new"
+        )
+        self.db.add(match_record)
+        
+        # 更新需求表的匹配计数
+        demand = self.db.query(DemandPool).filter(DemandPool.demand_id == demand_id).first()
+        if demand:
+            demand.match_count += 1
+            demand.last_match_at = datetime.utcnow()
+            
+        self.db.commit()
+        self.db.refresh(match_record)
+        return match_record.to_dict()
+
+    def get_matches_by_demand(self, demand_id: str, status: str = None) -> List[Dict[str, Any]]:
+        """
+        获取某个需求的所有匹配建议
+        """
+        from models.match import MatchPool
+        query = self.db.query(MatchPool).filter(MatchPool.demand_id == demand_id)
+        if status:
+            query = query.filter(MatchPool.status == status)
+        
+        results = query.order_by(MatchPool.match_score.desc()).all()
+        return [r.to_dict() for r in results]
+
+    def update_match_status(self, match_id: str, status: str) -> Optional[Dict[str, Any]]:
+        """
+        更新匹配状态 (new/interested/rejected/negotiating/...)
+        """
+        from models.match import MatchPool
+        match_record = self.db.query(MatchPool).filter(MatchPool.match_id == match_id).first()
+        if match_record:
+            match_record.status = status
+            self.db.commit()
+            self.db.refresh(match_record)
+            return match_record.to_dict()
+        return None
     
     # ==================== 对话历史操作 ====================
     

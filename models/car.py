@@ -78,6 +78,12 @@ class CarMemory(Base):
     is_boosted = Column(Boolean, default=False, nullable=False, comment="是否置顶")
     boost_expiry = Column(DateTime, nullable=True, comment="置顶到期时间")
     
+    # ==================== 扩展字段 (Phase 2) ====================
+    report_url = Column(String(500), nullable=True, comment="检测报告链接")
+    image_urls = Column(JSON, default=list, comment="图片链接列表")
+    attachments = Column(JSON, default=dict, comment="其他附件信息")
+    import_batch_id = Column(String(50), nullable=True, index=True, comment="导入批次号")
+    
     # 时间戳
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -118,6 +124,10 @@ class CarMemory(Base):
             # 置顶功能
             "is_boosted": self.is_boosted,
             "boost_expiry": self.boost_expiry.isoformat() if self.boost_expiry else None,
+            "report_url": self.report_url,
+            "image_urls": self.image_urls,
+            "attachments": self.attachments,
+            "import_batch_id": self.import_batch_id,
         }
 
     def get_lifecycle_records(self, db, record_type: str = None) -> list:

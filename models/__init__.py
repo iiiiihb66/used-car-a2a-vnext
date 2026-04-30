@@ -3,6 +3,7 @@
 导出所有数据模型
 """
 
+from models.match import MatchPool
 from models.user import User, UserPersona
 from models.car import CarMemory
 from models.car_lifecycle_record import CarLifecycleRecord, create_lifecycle_record, verify_car_chain, verify_full_chain
@@ -16,6 +17,7 @@ from models.agent_event import AgentEvent
 from models.growth import GrowthReview, SkillCandidate
 
 __all__ = [
+    "MatchPool",
     "User",
     "UserPersona",
     "CarMemory",

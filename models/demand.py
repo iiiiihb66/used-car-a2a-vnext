@@ -62,6 +62,10 @@ class DemandPool(Base):
     # 提醒设置
     notify_enabled = Column(Integer, default=1, nullable=False, comment="是否开启提醒")
     
+    # ==================== 扩展字段 (Phase 2) ====================
+    last_match_at = Column(DateTime, nullable=True, comment="上次执行自动匹配的时间")
+    match_count = Column(Integer, default=0, nullable=False, comment="当前有效匹配数")
+    
     # 时间戳
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -92,6 +96,8 @@ class DemandPool(Base):
             "notes": self.notes,
             "match_history": self.match_history,
             "notify_enabled": self.notify_enabled,
+            "last_match_at": self.last_match_at.isoformat() if self.last_match_at else None,
+            "match_count": self.match_count,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "fulfilled_at": self.fulfilled_at.isoformat() if self.fulfilled_at else None,
         }
