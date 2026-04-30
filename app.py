@@ -351,6 +351,13 @@ class MatchSessionRequest(BaseModel):
     max_rounds: int = Field(5, description="最大协商轮数")
 
 
+class MatchCreate(BaseModel):
+    demand_id: str = Field(..., description="需求 ID")
+    car_id: str = Field(..., description="车辆 ID")
+    match_score: float = Field(..., description="匹配分")
+    match_reason: Optional[str] = Field(None, description="匹配原因")
+
+
 class LifecycleRecordCreate(BaseModel):
     record_type: str = Field(..., description="maintenance/accident/price/ownership")
     data: Dict[str, Any] = Field(..., description="记录内容")
@@ -674,6 +681,21 @@ async def get_demand_matches(
     if not result.get("success"):
         raise HTTPException(status_code=404, detail=result.get("error", "需求不存在"))
     return result
+
+
+@app.post("/api/v1/matches", dependencies=[Depends(require_admin_token)])
+async def create_match(
+    match_data: MatchCreate,
+    db=Depends(get_db)
+) -> Dict[str, Any]:
+    memory = get_memory_service(db)
+    result = memory.create_match(
+        demand_id=match_data.demand_id,
+        car_id=match_data.car_id,
+        score=match_data.match_score,
+        reason=match_data.match_reason
+    )
+    return {"success": True, "data": result}
 
 
 @app.patch("/api/v1/matches/{match_id}")
