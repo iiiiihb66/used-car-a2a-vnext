@@ -1,6 +1,6 @@
 # Project Handoff
 
-更新时间：2026-04-29 01:30 Asia/Shanghai
+更新时间：2026-05-02 00:00 Asia/Shanghai
 
 ## 用途
 
@@ -172,6 +172,16 @@ backups/cloud_sqlite_20260427_134603.db (最新，部署前备份)
         - [x] `smoke_test.py` 回归通过，未破坏原有 A2A 协商链路。
         - [x] `scratch/test_match_flow.py` 验证了从 Match 记录到 A2A Session 的全生命周期。
 
+2. **本地待同步状态复核 (2026-05-02)**:
+    - 本地 `main` 已领先 GitHub `origin/main` 2 个提交：
+        - `a6339fb feat: add match model and match-to-session API (Phase 2.1 verified)`
+        - `cd52cde feat: add admin match creation endpoint for validation`
+    - 本地回归已通过：
+        - `AI_MODEL=mock AI_API_KEY=sk-test-mock python3 scripts/smoke_test.py`
+    - 新增正式线上验证脚本：
+        - `scripts/online_match_test.py`
+    - 该脚本替代临时 `scratch/online_match_test.py`，用于验证线上 `match -> session -> run -> detail` 链路。
+
 ## P0 问题修复成果 (2026-04-29)
 
 1. **中文编码修复**:
@@ -207,7 +217,13 @@ backups/cloud_sqlite_20260427_134603.db (最新，部署前备份)
 
 ## 当前 GitHub 与线上状态
 
-GitHub 提交: `3a38236` (fix: ensure review_reason persistence and robust smoke testing)
+GitHub 待推送目标提交:
+
+```text
+cd52cde feat: add admin match creation endpoint for validation
+```
+
+注意：2026-05-02 复核时，GitHub `origin/main` 仍停在 `21d3f81`，本地 `main` 已领先 2 个提交。需要先把本地提交和本 handoff 更新推到 GitHub，其他 AI 才能看到 Phase 2.1 最新状态。
 
 线上服务：
 - `used-car-a2a-vnext`
@@ -252,10 +268,12 @@ used-car-a2a-vnext
 
 ## 下一步优先级
 
-1. **观察 WorkBuddy 与 Qclaw 协同稳定性**: 在生产环境持续观察两类 Agent 的博弈质量。
-2. **复盘数据导出**: 增强 `/api/v1/admin/growth/reviews` 的导出功能，方便离线分析 Agent 博弈质量。
-3. **冷启动优化**: 考虑增加预热请求或优化 `app.py` 启动耗时，减少 CloudRun 503 发生概率。
-4. **性能监控**: 收集并展示 `/api/v1/agent/events` 中的时延数据。
+1. **同步 GitHub**: 推送本地 Phase 2.1 提交与本 handoff 更新。
+2. **线上部署 Phase 2.1**: 部署前先备份 SQLite，部署后运行 `scripts/online_match_test.py`。
+3. **观察 WorkBuddy 与 Qclaw 协同稳定性**: 在生产环境持续观察两类 Agent 的博弈质量。
+4. **复盘数据导出**: 增强 `/api/v1/admin/growth/reviews` 的导出功能，方便离线分析 Agent 博弈质量。
+5. **冷启动优化**: 考虑增加预热请求或优化 `app.py` 启动耗时，减少 CloudRun 503 发生概率。
+6. **性能监控**: 收集并展示 `/api/v1/agent/events` 中的时延数据。
 
 ## 新对话接管提示词
 
@@ -281,9 +299,10 @@ used-car-a2a-vnext
 - 最近线上已部署提交是 3f8efb2
 
 当前任务：
-1. 观察线上 WorkBuddy 与 Qclaw 的协作稳定性。
-2. 收集 /api/v1/agent/events 的复盘数据。
-3. 优化 Hermes-lite 的自动复盘总结深度。
+1. 确认 GitHub main 是否已包含 `cd52cde` 或之后提交。
+2. 如果未包含，先推送本地 main 到 GitHub。
+3. 部署 Phase 2.1 前先执行线上 SQLite 备份。
+4. 部署后运行 `scripts/online_match_test.py` 验证 match -> session 链路。
 ```
 
 ## 给其他 AI 的接管要求
