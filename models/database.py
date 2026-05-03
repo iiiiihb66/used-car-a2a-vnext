@@ -90,12 +90,14 @@ def init_database():
     from models.conversation import Conversation
     from models.social_graph import SocialGraph
     from models.demand import DemandPool
+    from models.match import MatchPool
+    from models.deal import Deal
     from models.negotiation import NegotiationHistory
     from models.point_transaction import PointTransaction
     from models.seller_report import SellerReport
     from models.agent_event import AgentEvent
     from models.growth import GrowthReview, SkillCandidate
-    
+
     Base.metadata.create_all(bind=engine)
     print("✅ 数据库表结构创建完成")
 
@@ -111,12 +113,14 @@ def reset_database():
     from models.conversation import Conversation
     from models.social_graph import SocialGraph
     from models.demand import DemandPool
+    from models.match import MatchPool
+    from models.deal import Deal
     from models.negotiation import NegotiationHistory
     from models.point_transaction import PointTransaction
     from models.seller_report import SellerReport
     from models.agent_event import AgentEvent
     from models.growth import GrowthReview, SkillCandidate
-    
+
     Base.metadata.drop_all(bind=engine)
     Base.metadata.create_all(bind=engine)
     print("✅ 数据库已重置")

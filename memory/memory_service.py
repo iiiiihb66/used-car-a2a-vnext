@@ -186,23 +186,19 @@ class MemoryService:
         
         return persona.to_dict()
     
-    def list_users(self, is_dealer: bool = None, limit: int = 100) -> List[Dict[str, Any]]:
+    def list_users(self, is_dealer: bool = None, limit: int = 100, offset: int = 0) -> Dict[str, Any]:
         """
-        列出用户
-        
-        Args:
-            is_dealer: 筛选车商
-            limit: 数量限制
-        
+        列出用户（支持分页）
+
         Returns:
-            用户列表
+            {"total": N, "items": [...]}
         """
         query = self.db.query(User)
         if is_dealer is not None:
             query = query.filter(User.is_dealer == is_dealer)
-        
-        users = query.limit(limit).all()
-        return [u.to_dict() for u in users]
+        total = query.count()
+        users = query.order_by(User.created_at.desc()).offset(offset).limit(limit).all()
+        return {"total": total, "items": [u.to_dict() for u in users]}
     
     # ==================== 车辆操作 ====================
     
@@ -285,23 +281,31 @@ class MemoryService:
         min_price: float = None,
         max_price: float = None,
         region: str = None,
-        limit: int = 50
-    ) -> List[Dict[str, Any]]:
+        mileage_max: float = None,
+        year_min: int = None,
+        year_max: int = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> Dict[str, Any]:
         """
-        列出上架的车辆
-        
+        列出上架的车辆（支持分页和筛选）
+
         Args:
             brand: 品牌筛选
             min_price: 最低价格
             max_price: 最高价格
             region: 地区筛选
-            limit: 数量限制
-        
+            mileage_max: 最大里程
+            year_min: 最小年份
+            year_max: 最大年份
+            limit: 每页数量
+            offset: 偏移量
+
         Returns:
-            车辆列表
+            {"total": N, "items": [...]}
         """
         query = self.db.query(CarMemory).filter(CarMemory.is_listed == True)
-        
+
         if brand:
             brands = [b.strip() for b in brand.split(",") if b.strip()]
             if len(brands) == 1:
@@ -314,12 +318,19 @@ class MemoryService:
             query = query.filter(CarMemory.price <= max_price)
         if region:
             query = query.filter(CarMemory.region == region)
-        
+        if mileage_max is not None:
+            query = query.filter(CarMemory.mileage <= mileage_max)
+        if year_min:
+            query = query.filter(CarMemory.year >= year_min)
+        if year_max:
+            query = query.filter(CarMemory.year <= year_max)
+
+        total = query.count()
         cars = query.order_by(
             CarMemory.is_boosted.desc(),
             CarMemory.listed_at.desc(),
-        ).limit(limit).all()
-        return [c.to_dict() for c in cars]
+        ).offset(offset).limit(limit).all()
+        return {"total": total, "items": [c.to_dict() for c in cars]}
     
     async def update_car_status(self, car_id: str, status: str) -> Dict[str, Any]:
         """

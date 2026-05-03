@@ -21,7 +21,7 @@ from tempfile import mkdtemp
 from typing import Any, Dict, List, Optional
 from uuid import uuid4
 
-from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
+from fastapi import Depends, FastAPI, File, Header, HTTPException, Query, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, PlainTextResponse, JSONResponse
 from pydantic import BaseModel, Field
@@ -47,6 +47,8 @@ from models.reputation import ReputationEngine
 from models.seller_report import SellerReport
 from models.user import User
 from utils.price_tools import PriceEvaluator, ConditionTemplate
+from models.deal import Deal
+from utils.excel_parser import parse_car_excel
 
 
 APP_TITLE = "二手车 A2A 档案协商工具"
@@ -358,6 +360,25 @@ class MatchCreate(BaseModel):
     match_reason: Optional[str] = Field(None, description="匹配原因")
 
 
+class DemandSubmitCar(BaseModel):
+    car_id: str = Field(..., description="车辆 ID")
+    dealer_id: int = Field(..., description="提交车源的车商用户 ID")
+
+
+class DealCreate(BaseModel):
+    match_id: str = Field(..., description="匹配记录 ID（需处于 deal_ready 状态）")
+    agreed_price: float = Field(..., description="成交价格")
+    confirmed_by: int = Field(..., description="确认成交的用户 ID")
+    note: Optional[str] = Field(None, description="备注")
+
+
+class DealActionRequest(BaseModel):
+    action: str = Field(..., description="决策动作: accept/reject/counter")
+    user_id: int = Field(..., description="做出决策的用户 ID")
+    counter_price: Optional[float] = Field(None, description="还价金额（action=counter 时必填）")
+    note: Optional[str] = Field(None, description="决策备注")
+
+
 class LifecycleRecordCreate(BaseModel):
     record_type: str = Field(..., description="maintenance/accident/price/ownership")
     data: Dict[str, Any] = Field(..., description="记录内容")
@@ -503,6 +524,8 @@ async def skill_markdown() -> str:
 - 帮 Agent 执行询价、议价、达成见面/沟通意向
 - 帮平台自动驱动买家 Agent 与卖家 Agent 多轮协商
 - 记录任意外部 Agent 的执行轨迹，并沉淀为复盘和技能候选
+- 支持车商批量导入车源（Excel）、上传图片和检测报告
+- 成交后由人类决策（接受/拒绝/还价），形成完整业务闭环
 - 不提供支付、托管、贷款、金融推荐
 
 ## Agent 使用方式
@@ -510,13 +533,18 @@ async def skill_markdown() -> str:
 1. 读取 `{PUBLIC_BASE_URL}/openapi.json`
 2. 使用 `{PUBLIC_BASE_URL}` 作为 API base URL
 3. 先调用 `POST /api/v1/users` 创建买家或车商用户
-4. 车商调用 `POST /api/v1/cars?user_id={{seller_id}}` 发布车源
-5. 买家调用 `POST /api/v1/demands` 发布买车需求
-6. 调用 `GET /api/v1/demands/{{demand_id}}/matches` 查看匹配车源
-7. 需要单步协商时调用 `/api/v1/agent/inquiry`、`/api/v1/agent/negotiate`、`/api/v1/agent/deal-intent`
-8. 需要自动协商时调用 `POST /api/v1/agent/sessions` 创建会话，再调用 `POST /api/v1/agent/sessions/{{session_id}}/run`
-9. 调用 `GET /api/v1/agent/sessions/{{session_id}}` 查看完整对话、事件和复盘轨迹
-10. 关键执行结果调用 `POST /api/v1/agent/events` 写入 Agent 记忆
+4. 车商调用 `POST /api/v1/cars?user_id={{seller_id}}` 发布车源（或 `POST /api/v1/cars/batch-import` 批量导入 Excel）
+5. 上传图片和检测报告: `POST /api/v1/upload`
+6. 买家调用 `POST /api/v1/demands` 发布买车需求
+7. 调用 `GET /api/v1/demands` 浏览需求大厅，查看待匹配需求
+8. 车商调用 `POST /api/v1/demands/{{demand_id}}/submit-car` 主动提交车源匹配需求
+9. 调用 `GET /api/v1/demands/{{demand_id}}/matches` 查看匹配车源
+10. 需要单步协商时调用 `/api/v1/agent/inquiry`、`/api/v1/agent/negotiate`、`/api/v1/agent/deal-intent`
+11. 需要自动协商时调用 `POST /api/v1/agent/sessions` 创建会话，再调用 `POST /api/v1/agent/sessions/{{session_id}}/run`
+12. 调用 `GET /api/v1/agent/sessions/{{session_id}}` 查看完整对话、事件和复盘轨迹
+13. 关键执行结果调用 `POST /api/v1/agent/events` 写入 Agent 记忆
+14. Agent 协商达成意向后，人类通过 `POST /api/v1/deals` 创建成交记录
+15. 人类决策: `POST /api/v1/deals/{{deal_id}}/action` 接受/拒绝/还价
 
 ## 接入说明
 
@@ -587,12 +615,20 @@ async def create_user(user_data: UserCreate, db=Depends(get_db)) -> Dict[str, An
 
 @app.get("/api/v1/users")
 async def list_users(
-    is_dealer: Optional[bool] = Query(None),
+    is_dealer: Optional[bool] = Query(None, description="筛选车商"),
+    limit: int = Query(20, ge=1, le=100, description="每页数量"),
+    offset: int = Query(0, ge=0, description="偏移量"),
     db=Depends(get_db),
 ) -> Dict[str, Any]:
     memory = get_memory_service(db)
-    users = memory.list_users(is_dealer=is_dealer)
-    return {"success": True, "total": len(users), "data": users}
+    result = memory.list_users(is_dealer=is_dealer, limit=limit, offset=offset)
+    return {
+        "success": True,
+        "total": result["total"],
+        "offset": offset,
+        "limit": limit,
+        "data": result["items"],
+    }
 
 
 @app.get("/api/v1/users/{user_id}")
@@ -726,21 +762,41 @@ async def create_session_from_match(
     # 获取 Demand 和 Car
     demand = match_record.demand
     car = match_record.car
-    
+
     if not demand or not car:
         raise HTTPException(status_code=400, detail="关联数据不完整")
-        
+
+    # 构造有上下文的 buyer_goal
+    goal_parts = []
+    if demand.car_type:
+        goal_parts.append(f"求购{demand.car_type}")
+    if demand.brand_preference:
+        goal_parts.append(f"偏好{demand.brand_preference}")
+    goal_parts.append(f"预算{demand.budget_min}-{demand.budget_max}万")
+    if demand.region or demand.city:
+        goal_parts.append(f"地区{demand.region or ''}{demand.city or ''}")
+    if match_record.match_reason:
+        goal_parts.append(f"匹配建议:{match_record.match_reason}")
+    buyer_goal = "，".join(goal_parts)
+
+    # 计算合理的目标价：取预算范围中间偏下，为 Agent 留出议价空间
+    if demand.budget_max and demand.budget_max > demand.budget_min:
+        buyer_target_price = round((demand.budget_min + demand.budget_max) / 2, 2)
+    else:
+        buyer_target_price = round(demand.budget_min * 1.1, 2)
+
     # 构造 Session 创建请求
     session_payload = {
         "buyer_id": demand.user_id,
         "seller_id": car.owner_id,
         "car_id": car.car_id,
-        "buyer_goal": f"根据匹配建议({match_record.match_reason})发起协商",
+        "buyer_goal": buyer_goal,
         "buyer_agent_name": req.buyer_agent_name,
         "seller_agent_name": req.seller_agent_name,
         "max_rounds": req.max_rounds,
+        "buyer_budget_min": demand.budget_min,
         "buyer_budget_max": demand.budget_max,
-        "buyer_target_price": demand.budget_min if demand.budget_min > 0 else None
+        "buyer_target_price": buyer_target_price,
     }
     
     # 为了保持逻辑一致性，我们手动生成 session_id 并记录 auto_session_created
@@ -829,22 +885,36 @@ async def create_car(
 
 @app.get("/api/v1/cars")
 async def list_cars(
-    brand: Optional[str] = Query(None),
-    min_price: Optional[float] = Query(None),
-    max_price: Optional[float] = Query(None),
-    region: Optional[str] = Query(None),
-    limit: int = Query(50, ge=1, le=100),
+    brand: Optional[str] = Query(None, description="品牌"),
+    min_price: Optional[float] = Query(None, description="最低价格(万)"),
+    max_price: Optional[float] = Query(None, description="最高价格(万)"),
+    region: Optional[str] = Query(None, description="地区"),
+    mileage_max: Optional[float] = Query(None, description="最大里程(万公里)"),
+    year_min: Optional[int] = Query(None, description="最小年份"),
+    year_max: Optional[int] = Query(None, description="最大年份"),
+    limit: int = Query(20, ge=1, le=100, description="每页数量"),
+    offset: int = Query(0, ge=0, description="偏移量"),
     db=Depends(get_db),
 ) -> Dict[str, Any]:
     memory = get_memory_service(db)
-    cars = await memory.list_listed_cars(
+    result = await memory.list_listed_cars(
         brand=brand,
         min_price=min_price,
         max_price=max_price,
         region=region,
+        mileage_max=mileage_max,
+        year_min=year_min,
+        year_max=year_max,
         limit=limit,
+        offset=offset,
     )
-    return {"success": True, "total": len(cars), "data": cars}
+    return {
+        "success": True,
+        "total": result["total"],
+        "offset": offset,
+        "limit": limit,
+        "data": result["items"],
+    }
 
 
 @app.get("/api/v1/cars/{car_id}")
@@ -1805,3 +1875,338 @@ async def review_report(
         "data": report.to_dict(),
         "penalty_result": penalty_result,
     }
+
+
+# ============================================================
+# 需求大厅（公开）
+# ============================================================
+@app.get("/api/v1/demands")
+async def list_demands(
+    status: Optional[str] = Query(None, description="筛选状态"),
+    region: Optional[str] = Query(None, description="地区筛选"),
+    brand: Optional[str] = Query(None, description="品牌偏好筛选"),
+    limit: int = Query(20, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    db=Depends(get_db),
+) -> Dict[str, Any]:
+    query = db.query(DemandPool)
+    if status:
+        query = query.filter(DemandPool.status == status)
+    else:
+        query = query.filter(DemandPool.status == "active")
+    if region:
+        query = query.filter(DemandPool.region == region)
+    if brand:
+        query = query.filter(DemandPool.brand_preference.contains(brand))
+    total = query.count()
+    demands = query.order_by(DemandPool.created_at.desc()).offset(offset).limit(limit).all()
+    return {"success": True, "total": total, "offset": offset, "limit": limit, "data": [d.to_dict() for d in demands]}
+
+
+# ============================================================
+# 车商主动提交车源匹配需求
+# ============================================================
+@app.post("/api/v1/demands/{demand_id}/submit-car")
+async def submit_car_to_demand(
+    demand_id: str,
+    req: DemandSubmitCar,
+    db=Depends(get_db),
+) -> Dict[str, Any]:
+    memory = get_memory_service(db)
+    demand = memory.get_demand(demand_id)
+    if not demand:
+        raise HTTPException(status_code=404, detail="需求不存在")
+    if demand.get("status") != "active":
+        raise HTTPException(status_code=400, detail="需求已关闭")
+
+    car = db.query(CarMemory).filter(CarMemory.car_id == req.car_id, CarMemory.owner_id == req.dealer_id).first()
+    if not car:
+        raise HTTPException(status_code=404, detail="车辆不存在或不归属于该车商")
+
+    from models.match import MatchPool
+    existing = db.query(MatchPool).filter(
+        MatchPool.demand_id == demand_id,
+        MatchPool.car_id == req.car_id,
+    ).first()
+    if existing:
+        raise HTTPException(status_code=409, detail="该车源已提交过匹配")
+
+    match_record = memory.create_match(
+        demand_id=demand_id,
+        car_id=req.car_id,
+        score=80.0,
+        reason="车商主动提交",
+    )
+
+    _record_agent_event(
+        db,
+        actor_agent="platform-orchestrator",
+        actor_role="platform",
+        event_type="dealer_submitted_car",
+        status="succeeded",
+        user_id=demand.get("user_id"),
+        related_user_id=req.dealer_id,
+        related_car_id=req.car_id,
+    )
+
+    return {"success": True, "message": "车源已提交匹配", "data": match_record}
+
+
+# ============================================================
+# 文件上传
+# ============================================================
+UPLOAD_DIR = Path(__file__).resolve().parent / "uploads"
+UPLOAD_DIR.mkdir(exist_ok=True)
+
+
+@app.post("/api/v1/upload")
+async def upload_file(
+    file: UploadFile = File(...),
+) -> Dict[str, Any]:
+    ext = Path(file.filename).suffix if file.filename else ".bin"
+    unique_name = f"{uuid4().hex}{ext}"
+    file_path = UPLOAD_DIR / unique_name
+    content = await file.read()
+    file_path.write_bytes(content)
+    return {
+        "success": True,
+        "data": {
+            "url": f"/uploads/{unique_name}",
+            "filename": file.filename,
+            "size": len(content),
+        },
+    }
+
+
+@app.get("/uploads/{filename}")
+async def serve_uploaded_file(filename: str):
+    file_path = UPLOAD_DIR / filename
+    if not file_path.exists() or not file_path.is_file():
+        raise HTTPException(status_code=404, detail="文件不存在")
+    return FileResponse(str(file_path))
+
+
+# ============================================================
+# Excel 批量导入车源
+# ============================================================
+@app.post("/api/v1/cars/batch-import")
+async def batch_import_cars(
+    file: UploadFile = File(...),
+    user_id: int = Query(..., description="车商用户 ID"),
+    db=Depends(get_db),
+) -> Dict[str, Any]:
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="用户不存在")
+    if not user.is_dealer:
+        raise HTTPException(status_code=400, detail="只有车商用户才能批量导入车源")
+
+    temp_dir = Path(mkdtemp())
+    temp_file = temp_dir / (uuid4().hex + ".xlsx")
+    content = await file.read()
+    temp_file.write_bytes(content)
+
+    try:
+        cars_data, errors = parse_car_excel(str(temp_file))
+        if errors and not cars_data:
+            return {"success": False, "error": "解析失败", "errors": errors}
+
+        memory = get_memory_service(db)
+        created = []
+        for car_data in cars_data:
+            try:
+                car_id = f"CAR-{datetime.utcnow().strftime('%Y%m%d')}-{uuid4().hex[:8].upper()}"
+                payload = {
+                    "car_id": car_id,
+                    "brand": car_data.get("brand", ""),
+                    "series": car_data.get("series") or car_data.get("brand", ""),
+                    "model": car_data.get("model", ""),
+                    "year": int(car_data.get("year", 0)),
+                    "price": float(car_data.get("price", 0)),
+                    "original_price": float(car_data["original_price"]) if car_data.get("original_price") else None,
+                    "target_price": float(car_data["target_price"]) if car_data.get("target_price") else None,
+                    "mileage": float(car_data.get("mileage", 0)),
+                    "color": car_data.get("color"),
+                    "transmission": car_data.get("transmission"),
+                    "fuel_type": car_data.get("fuel_type"),
+                    "region": car_data.get("region"),
+                    "city": car_data.get("city"),
+                    "engine": car_data.get("engine"),
+                    "plate_number": car_data.get("plate_number"),
+                    "report_url": car_data.get("report_url"),
+                    "image_urls": car_data.get("image_urls") or [],
+                    "owner_id": user_id,
+                    "is_listed": True,
+                    "current_status": "上架中",
+                }
+                result = await memory.create_car_memory(payload)
+                created.append(result)
+            except Exception as exc:
+                errors.append(f"创建车辆失败 ({car_data.get('brand')} {car_data.get('model')}): {exc}")
+
+        _record_agent_event(
+            db,
+            actor_agent="platform-orchestrator",
+            actor_role="platform",
+            event_type="batch_import_cars",
+            status="succeeded",
+            related_user_id=user_id,
+        )
+
+        return {
+            "success": True,
+            "data": {
+                "total": len(cars_data),
+                "created": len(created),
+                "errors": errors,
+                "cars": created,
+            },
+        }
+    finally:
+        shutil.rmtree(temp_dir, ignore_errors=True)
+
+
+# ============================================================
+# 成交闭环 + 人类决策
+# ============================================================
+def _update_match_status_by_deal(db, match_id: str, status: str) -> None:
+    from models.match import MatchPool
+    match_record = db.query(MatchPool).filter(MatchPool.match_id == match_id).first()
+    if match_record:
+        match_record.status = status
+        db.flush()
+
+
+@app.post("/api/v1/deals")
+async def create_deal(
+    req: DealCreate,
+    db=Depends(get_db),
+) -> Dict[str, Any]:
+    from models.match import MatchPool
+    match_record = db.query(MatchPool).filter(MatchPool.match_id == req.match_id).first()
+    if not match_record:
+        raise HTTPException(status_code=404, detail="匹配记录不存在")
+    if match_record.status != "deal_ready":
+        raise HTTPException(status_code=400, detail="匹配记录未达到成交就绪状态")
+
+    existing = db.query(Deal).filter(Deal.match_id == req.match_id).first()
+    if existing:
+        raise HTTPException(status_code=409, detail="该匹配记录已有成交记录")
+
+    demand = match_record.demand
+    car = match_record.car
+    if not demand or not car:
+        raise HTTPException(status_code=400, detail="关联数据不完整")
+
+    deal_id = f"DEAL-{datetime.utcnow().strftime('%Y%m%d')}-{uuid4().hex[:8].upper()}"
+    deal = Deal(
+        deal_id=deal_id,
+        match_id=req.match_id,
+        car_id=match_record.car_id,
+        buyer_id=demand.user_id,
+        seller_id=car.owner_id,
+        agreed_price=req.agreed_price,
+        status="pending",
+        decided_by=req.confirmed_by,
+        decision_note=req.note,
+    )
+    db.add(deal)
+    db.commit()
+    db.refresh(deal)
+
+    _record_agent_event(
+        db,
+        actor_agent="platform-orchestrator",
+        actor_role="platform",
+        event_type="deal_created",
+        status="succeeded",
+        user_id=demand.user_id,
+        related_user_id=car.owner_id,
+        related_car_id=match_record.car_id,
+        related_conversation_id=match_record.session_id,
+        input_snapshot={"match_id": req.match_id, "agreed_price": req.agreed_price},
+    )
+
+    return {"success": True, "message": "成交意向已创建，等待人类确认", "data": deal.to_dict()}
+
+
+@app.post("/api/v1/deals/{deal_id}/action")
+async def deal_action(
+    deal_id: str,
+    req: DealActionRequest,
+    db=Depends(get_db),
+) -> Dict[str, Any]:
+    deal = db.query(Deal).filter(Deal.deal_id == deal_id).first()
+    if not deal:
+        raise HTTPException(status_code=404, detail="成交记录不存在")
+    if deal.status != "pending":
+        raise HTTPException(status_code=400, detail=f"成交记录已处理（当前状态: {deal.status}）")
+
+    if req.action == "accept":
+        deal.status = "accepted"
+        deal.decided_by = req.user_id
+        deal.decision_note = req.note
+        _update_match_status_by_deal(db, deal.match_id, "deal_accepted")
+    elif req.action == "reject":
+        deal.status = "rejected"
+        deal.decided_by = req.user_id
+        deal.decision_note = req.note or "买家/卖家拒绝成交"
+        _update_match_status_by_deal(db, deal.match_id, "deal_rejected")
+    elif req.action == "counter":
+        if not req.counter_price or req.counter_price <= 0:
+            raise HTTPException(status_code=400, detail="还价金额必须大于 0")
+        deal.status = "countered"
+        deal.counter_price = req.counter_price
+        deal.decided_by = req.user_id
+        deal.decision_note = req.note
+        _update_match_status_by_deal(db, deal.match_id, "negotiating")
+    else:
+        raise HTTPException(status_code=400, detail=f"未知决策动作: {req.action}")
+
+    db.commit()
+    db.refresh(deal)
+
+    _record_agent_event(
+        db,
+        actor_agent="platform-orchestrator",
+        actor_role="platform",
+        event_type=f"deal_{req.action}",
+        status="succeeded",
+        user_id=deal.buyer_id,
+        related_user_id=deal.seller_id,
+        related_car_id=deal.car_id,
+    )
+
+    return {"success": True, "message": f"成交记录已 {req.action}", "data": deal.to_dict()}
+
+
+@app.get("/api/v1/deals/{deal_id}")
+async def get_deal(
+    deal_id: str,
+    db=Depends(get_db),
+) -> Dict[str, Any]:
+    deal = db.query(Deal).filter(Deal.deal_id == deal_id).first()
+    if not deal:
+        raise HTTPException(status_code=404, detail="成交记录不存在")
+    return {"success": True, "data": deal.to_dict()}
+
+
+@app.get("/api/v1/deals")
+async def list_deals(
+    buyer_id: Optional[int] = Query(None),
+    seller_id: Optional[int] = Query(None),
+    status: Optional[str] = Query(None),
+    limit: int = Query(20, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    db=Depends(get_db),
+) -> Dict[str, Any]:
+    query = db.query(Deal)
+    if buyer_id:
+        query = query.filter(Deal.buyer_id == buyer_id)
+    if seller_id:
+        query = query.filter(Deal.seller_id == seller_id)
+    if status:
+        query = query.filter(Deal.status == status)
+    total = query.count()
+    deals = query.order_by(Deal.created_at.desc()).offset(offset).limit(limit).all()
+    return {"success": True, "total": total, "offset": offset, "limit": limit, "data": [d.to_dict() for d in deals]}

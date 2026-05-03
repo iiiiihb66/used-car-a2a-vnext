@@ -1,6 +1,6 @@
 # Project Handoff
 
-更新时间：2026-05-02 00:00 Asia/Shanghai
+更新时间：2026-05-03 16:45 Asia/Shanghai
 
 ## 用途
 
@@ -9,7 +9,7 @@
 新对话接管项目时，优先读取：
 
 1. `PROJECT_HANDOFF.md`
-2. `CODEX_CLOUD_HANDOFF.md`
+2. `AGENTS.md` (已中文化)
 3. `README.md`
 4. `DEPLOY_CLOUDBASE.md`
 5. `SQLITE_OPERATIONS.md`
@@ -26,305 +26,60 @@
 3. 用 Hermes-lite 记录事件，后续复盘测试过程。
 4. 尽量使用免费或低成本云资源跑通验证。
 
-说明：
+## Antigravity (Gemini 1.5 Pro) 接手后成果 (2026-05-03)
 
-- Qclaw 和 WorkBuddy 只是当前手头的两个测试 Agent。
-- 系统不绑定特定 Agent 名称。
-- 任意支持 Skill / OpenAPI / HTTP JSON 调用的 Agent 都可以接入。
-- `buyer_agent_name`、`seller_agent_name`、`actor_agent` 只是记录来源名称。
+### Phase 2.1 (14:55 批次) — 匹配引擎 + 一键协商
+1. **匹配引擎 (Match Engine)**: 成功部署 `match_pool` 逻辑，支持需求与车源的结构化匹配。
+2. **一键协商**: 线上已支持从匹配记录直接开启 A2A 自动协商链路。
+3. **线上验收**: 运行 `scripts/online_match_test.py` 验证通过，线上”需求 -> 匹配 -> 协商”闭环成功。
+4. **AGENTS.md 中文化**: 将项目规则手册完整翻译为中文，明确了”非金融、工具型”的硬性约束。
+5. **同步 GitHub**: 本地领先的 Phase 2.1 提交（至 `b9adcf3`）已全部推送到 GitHub 远程仓库。
+6. **生产环境保障**: 预部署备份 + 健康度确认。
 
-## 旧对话中的关键转折
-
-旧对话最初判断：
-
-1. 最大短板是线上仍使用容器内 SQLite。
-2. CloudBase 重部署会导致测试用户、车源、会话、Hermes-lite 复盘数据丢失。
-3. 因此建议优先接 CloudBase SQL / MySQL，把 `DATABASE_URL` 配到 CloudBase 环境变量。
-
-后续实际验证发现：
-
-1. CloudBase SQL / MySQL 需要私有网络等能力。
-2. 当前控制台截图显示私有网络是标准版能力，套餐约 179.10 元/月。
-3. 这与“尽量用免费资源跑通 MVP”的目标冲突。
-
-因此策略已更新：
-
-1. 不升级套餐。
-2. 不点任何付费能力。
-3. 不走 CloudBase SQL / MySQL + 私有网络。
-4. 当前先采用 CloudBase 云托管 + SQLite-first + 备份。
-5. 后续如仍需免费/个人版持久化，再评估 CloudBase 文档型数据库 HTTP API。
-
-## 当前已完成
-
-最近关键提交：
-
-```text
-c6a7286 feat: support sqlite-first cloudbase mvp with backup script
-ed4a63e docs: add project handoff for codex recovery
-2259384 feat: add cloud sqlite backup and restore workflow
-cbfd53f docs: add mvp test prompts for qclaw and workbuddy
-3f8efb2 docs: clarify generic agent integration support
-```
-
-这些提交完成：
-
-1. `models/database.py` 支持 `DB_DIR` 和 `SQLITE_FILENAME` 配置 SQLite 路径。
-2. 新增 `scripts/backup_sqlite.py`，可创建 SQLite 一致性备份。
-3. `.env.example` 增加 SQLite 相关配置。
-4. `README.md`、`DEPLOY_CLOUDBASE.md`、`GITHUB_ACTIONS.md`、`CODEX_CLOUD_HANDOFF.md` 更新为免费版 SQLite-first 路线。
-5. `GET /api/v1/admin/database/backup` 支持从线上下载 SQLite 备份。
-6. `POST /api/v1/admin/database/restore` 支持必要时恢复 SQLite 备份。
-7. `scripts/cloud_sqlite_backup.py` 提供本地下载/恢复入口。
-8. `SQLITE_OPERATIONS.md` 固化部署前后操作流程。
-9. `MVP_AGENT_TEST_PROMPTS.md` 提供 Qclaw、WorkBuddy 和通用 Agent 测试提示词。
-10. Skill / OpenAPI 文案已明确支持任意外部 Agent，不绑定 Qclaw / WorkBuddy。
-11. 新增 `scripts/online_smoke_test.py`，把线上业务闭环验证固化成可重复脚本，带有 CloudRun 冷启动超时控制。
-12. **Agent 核心优化 (Antigravity)**:
-    - **买家 (Qclaw-buyer)**: 支持 `proposed_price` 动态递增出价（参考评估价与展示价差），支持批量品牌匹配，增加 `deal_ready` 后的主动确认流程。
-    - **卖家 (WorkBuddy-seller)**: 实现结构化车况模板（外观、内饰、机械、历史），引用市场平均价数据支撑出价，增加报价一致性纠错。
-    - **专用 Agent 分离**: 新增 `agents/qclaw_buyer.py`，将买家定价逻辑抽离，支持非线性动态出价博弈。
-    - **工具化**: 新增 `utils/price_tools.py` 提供估价引擎和描述模板。
-    - **API 优化**: 修复 `POST /api/v1/cars` 字段冗余，统一支持 `owner_id` 在 Body 传输。
-
-## GitHub 与线上状态
-
-GitHub 仓库：
-
-```text
-https://github.com/iiiiihb66/used-car-a2a-vnext
-```
-
-当前 `main` 已推送到：
-
-```text
-3f8efb2 docs: clarify generic agent integration support
-```
-
-CloudBase 已部署并完成切流。
-
-线上确认：
-
-1. `GET /openapi.json` 中 `buyer_agent_name` 默认值为 `buyer-agent`。
-2. `GET /openapi.json` 中 `seller_agent_name` 默认值为 `seller-agent`。
-3. `GET /skill.md` 已包含“不绑定特定 Agent 客户端”和“记录任意外部 Agent”的通用接入说明。
-4. 混元模型链路已在线上跑通，最近一次自动协商事件中 `agent_response.mock=false`。
-5. 线上自动协商 MVP 已跑通：创建买家、卖家、车源、session、run、查询 conversations/events。
-
-最近线上备份：
-
-```text
-backups/cloud_sqlite_20260426_100440.db
-backups/cloud_sqlite_20260426_100824.db
-backups/cloud_sqlite_20260427_134603.db (最新，部署前备份)
-```
-
-这些备份在本地 `backups/`，已被 `.gitignore` 排除，不会上传 GitHub。
-
-## Antigravity 接手后成果 (2026-04-27)
-
-1. **核心 Bug 修复**: 修复了 `app.py` 中缺失 `_calculate_offer_price` 函数定义的问题，解决了自动协商 session run 时的 NameError。
-2. **测试脚本增强**:
-   - 增强了 `scripts/online_smoke_test.py`，增加了对 CloudRun 冷启动 (503) 的容错重试逻辑。
-   - 增加了更丰富的进度日志输出。
-3. **线上验证**:
-   - 成功执行了线上 SQLite 备份 (`backups/cloud_sqlite_20260427_134603.db`)。
-   - 完成了代码热修复后的线上重新部署。
-   - 通过 `online_smoke_test.py` 验证了线上业务闭环（买家/卖家创建、车源发布、自动协商达成交）。
-4. **MVP Agent 验证**:
-   - 扮演 Antigravity-test-agent 执行了 `MVP_AGENT_TEST_PROMPTS.md` 中的全流程。
-   - 成功在 `/api/v1/agent/events` 中记录了测试观察。
-5. **Hermes-lite 增强**:
-   - 增强了 `memory/growth_engine.py`，支持识别 `validation` 和 `smoke_test` 事件。
-   - 增加了针对测试卡点（如 503 错误）的自动动作建议。
-6. **Agent 深度优化 (2026-04-27)**:
-   - **Buyer (Qclaw)**: 实现了非线性动态出价逻辑；支持批量品牌匹配工具；增加了成交前的“最终确认”闭环。
-   - **Seller (WorkBuddy)**: 引入结构化车况模板（外观/内饰/机械/历史）；增加了基于市场数据的价格依据支持；实现了口头报价与系统参数的自动纠错机制。
-   - **通用能力**: 强化了 Prompt 约束以隐藏内部指令，并增强了理解纠错能力。
-
-## 当前部署策略
-
-## Antigravity 接手后成果 (2026-04-28)
-
-1. **Orchestration & 隐私优化**:
-    - **防止指令泄露**: 在 `A2AMessage` 和 `Conversation` 中引入 `is_system` 标识，自动隐藏调度器 Prompt 及其回复。
-    - **API 增强**: 修改 `A2ABus.get_conversation_history` 和 `app.get_agent_session`，默认过滤 `is_system=1` 的消息。
-    - **事件脱敏**: 对 `AgentEvent` 记录进行脱敏处理，移除包含 Prompt 的原始快照。
-    
-2. **P0/P1 修复: 持久化与一致性**:
-    - **Session 摘要持久化**: `GET /api/v1/agent/sessions/{session_id}` 接口现在返回完整 `summary`（成交价、状态、轮次等）。
-    - **成交确认入库**: 最终成交确认消息现在作为 `is_system=0` 对话入库，用户可见。
-    - **底价保护 (Floor Protection)**: 强化 `_is_deal_ready` 逻辑，确保 `agreed_price >= target_price`。
-    - **Agent 优化**: `QclawBuyer` 现在会在 Prompt 中明确引用平台评估价。
-
-## Phase 2: Demand Pool & Match Engine (2026-04-30)
-
-1. **Model & API (Phase 2.1)**:
-    - **MatchPool**: 引入 `match_pool` 表，追踪需求与车源的匹配分 (`match_score`)、原因 (`match_reason`) 和状态 (`status`)。
-    - **CarMemory 增强**: 增加 `report_url` (检测报告)、`image_urls` (JSON 列表)、`attachments` (通用附件) 和 `import_batch_id`。
-    - **DemandPool 增强**: 增加 `last_match_at` 和 `match_count` 追踪匹配活跃度。
-    - **API 扩展**: 
-        - `PATCH /api/v1/matches/{match_id}`: 更新匹配意向状态。
-        - `POST /api/v1/matches/{match_id}/session`: 支持从匹配记录一键转入 A2A 自动协商，并自动填充预算和目标价约束。
-    - **验证状态**: 
-        - [x] 数据库 `match_pool` 表成功创建。
-        - [x] `CarMemory` 成功支持 `report_url` 等 Phase 2 字段的保存与下发。
-        - [x] `smoke_test.py` 回归通过，未破坏原有 A2A 协商链路。
-        - [x] `scratch/test_match_flow.py` 验证了从 Match 记录到 A2A Session 的全生命周期。
-
-2. **本地待同步状态复核 (2026-05-02)**:
-    - 本地 `main` 已领先 GitHub `origin/main` 2 个提交：
-        - `a6339fb feat: add match model and match-to-session API (Phase 2.1 verified)`
-        - `cd52cde feat: add admin match creation endpoint for validation`
-    - 本地回归已通过：
-        - `AI_MODEL=mock AI_API_KEY=sk-test-mock python3 scripts/smoke_test.py`
-    - 新增正式线上验证脚本：
-        - `scripts/online_match_test.py`
-    - 该脚本替代临时 `scratch/online_match_test.py`，用于验证线上 `match -> session -> run -> detail` 链路。
-
-## P0 问题修复成果 (2026-04-29)
-
-1. **中文编码修复**:
-    - 在 `app.py` 中引入 `add_utf8_charset` 中间件，强制所有 JSON 响应使用 `application/json; charset=utf-8`。
-    - 解决了微信小程序/CloudBase 环境下的中文字段乱码问题。
-
-2. **价格解析与单位规范化**:
-    - 升级 `utils/price_tools.py` 中的 `PriceEvaluator`，扩大品牌覆盖（本田、丰田、比亚迪等），优化折旧模型。
-    - 优化 `app.py` 中的 `_calculate_offer_price` 逻辑，将“评估价”与“展示价”加权平均作为协商锚点，避免买家报出极低价格。
-    - 增加了 `display_price * 0.5` 的硬性底价兜底，彻底杜绝 `2.88` 等离谱报价。
-
-3. **504 超时保护**:
-    - 在 `/run` 核心循环中增加 `max_duration = 25.0s` 耗时检查。
-    - 针对长耗时对话，在网关 30s 超时前自动停止并转为 `needs_human_review`，确保状态正常同步。
-
-4. **底价保护验证**:
-    - 修正了由于价格异常导致的底价逻辑失效。
-    - 在 `online_smoke_test.py` 中增加了 WorkBuddy 专项场景回归。
-
-## 最终验收冲突复核 (2026-04-29)
-
-发现 Qclaw 与 WorkBuddy 结果不一致：
-1. **WorkBuddy 报价异常 (7.24/7.45万)**: 复核 session `auto_20260429031044_2f8e9d54` 发现，对于 13.8万雅阁，买家报价 7.24/7.45万。经推算，该数值与系统在 `year=0` 时的计算结果完全吻合，说明评估逻辑触发了残值兜底，且缺乏对挂牌价的合理性约束。
-2. **中文乱码争议**: 经 `curl -i` 与 `requests` 直接核验，平台 API 返回的原始 JSON 字符完全正常且包含 `charset=utf-8`。乱码确认为客户端（WorkBuddy）解析环境问题。
-3. **Summary 理由缺失**: 即使进入 `needs_human_review`，用户也无法得知是价格分歧过大还是超时拦截。
-
-## 修复策略
-
-1. **Rationality Interceptor (P0)**: 增加出价合理性拦截。若买家出价低于挂牌价的 75%（或其他合理比例），系统将拦截报价，不发送给卖家，直接转入 `needs_human_review`。
-2. **Detailed Review Reason (P1)**: 在 `summary` 中增加 `review_reason`，明确告知用户为何需要人工介入（如：报价低于合理下限、博弈陷入僵局、评估价差异巨大等）。
-3. **Explicit Encoding Header (P1)**: 在核心响应中强制显式声明 `charset=utf-8`，降低客户端误读概率。
-4. **Admin API Debugging (P1)**: 为 `agent-events` 增加 `related_conversation_id` 过滤，方便 P0 问题的线上排查。
-
-## 当前 GitHub 与线上状态
-
-GitHub 待推送目标提交:
-
-```text
-cd52cde feat: add admin match creation endpoint for validation
-```
-
-注意：2026-05-02 复核时，GitHub `origin/main` 仍停在 `21d3f81`，本地 `main` 已领先 2 个提交。需要先把本地提交和本 handoff 更新推到 GitHub，其他 AI 才能看到 Phase 2.1 最新状态。
-
-线上服务：
-- `used-car-a2a-vnext`
-- 配置：SQLite-first, minCount=1, maxCount=1
-
-CloudBase 环境：
-
-```text
-car-assistant-prod-3dqle77ef680c
-```
-
-CloudBase 服务：
-
-```text
-used-car-a2a-vnext
-```
-
-当前推荐配置：
-
-1. `DATABASE_URL` 留空。
-2. 使用默认 SQLite。
-3. CloudBase 云托管实例数保持为 1。
-4. 部署前后执行 `python scripts/cloud_sqlite_backup.py download --output-dir ./backups`。
-
-10. **Session 状态持久化与价格一致性修复 (2026-04-28)**:
-    - **回归发现**: 
-        a. `GET session` 接口缺少 `summary`（成交价、状态、轮次等），导致外部 Agent 无法闭环查询。
-        b. 最终成交确认消息未进入 `conversations` 历史，用户回看时看不到成交动作。
-        c. `agreed_price` 存在与底价冲突或与对话报价不一致的情况。
-    - **修复策略**: 
-        a. 增强 `GET /api/v1/agent/sessions/{session_id}`，自动从 `auto_session_completed` 事件中提取并返回 `summary` 和 `turns`。
-        b. 在 `run_agent_session` 中显式写入成交确认消息到对话表（`is_system=0`）。
-        c. 强化底价保护逻辑，确保 `agreed_price >= car.target_price` 且与对话最后出价一致。
-        d. 优化 `Qclaw-buyer` 逻辑，在议价时主动引用平台评估价。
-    - **技术约束**: 维持单实例 SQLite-first MVP。
-
-重要限制：
-
-1. SQLite 适合 MVP 单实例验证。
-2. SQLite 不适合作为多实例在线主库。
-3. 重部署仍可能导致容器内数据丢失，必须补备份流程。
+### Phase 2.2 (16:45 批次) — 业务闭环 + 生产硬化
+1. **文件上传**: `POST /api/v1/upload` + `GET /uploads/{filename}`，支持图片和 PDF。
+2. **Excel 批量导入车源**: `POST /api/v1/cars/batch-import`，使用 `utils/excel_parser.py` 解析，支持品牌/车型/年份/价格/里程等字段。
+3. **需求大厅**: `GET /api/v1/demands` 公开浏览需求 + `POST /api/v1/demands/{id}/submit-car` 车商主动提交车源匹配（无需 admin token）。
+4. **成交闭环 + 人类决策**: `models/deal.py`（Deal 模型）+ `POST /api/v1/deals` 创建成交 + `POST /api/v1/deals/{id}/action` 接受/拒绝/还价。
+5. **修复 match→session 参数映射**: 传入 `buyer_budget_min`/`buyer_target_price`/`buyer_goal` 有上下文的参数，确保 submit-car → deal_ready 链路可用。
+6. **分页**: `GET /api/v1/cars` 和 `GET /api/v1/users` 增加 `offset/limit` 分页；`GET /api/v1/cars` 新增 `mileage_max`/`year_min`/`year_max` 筛选。
+7. **代码规范**: `models/database.py` 显式导入 `MatchPool` 和 `Deal`。
+8. **验证**: 原始 `scripts/smoke_test.py` ✅ 通过；全链路（submit-car → session → deal_ready → deal → human accept）✅ 通过。
 
 ## 下一步优先级
 
-1. **同步 GitHub**: 推送本地 Phase 2.1 提交与本 handoff 更新。
-2. **线上部署 Phase 2.1**: 部署前先备份 SQLite，部署后运行 `scripts/online_match_test.py`。
-3. **观察 WorkBuddy 与 Qclaw 协同稳定性**: 在生产环境持续观察两类 Agent 的博弈质量。
-4. **复盘数据导出**: 增强 `/api/v1/admin/growth/reviews` 的导出功能，方便离线分析 Agent 博弈质量。
-5. **冷启动优化**: 考虑增加预热请求或优化 `app.py` 启动耗时，减少 CloudRun 503 发生概率。
-6. **性能监控**: 收集并展示 `/api/v1/agent/events` 中的时延数据。
+1. **部署到 CloudBase**: 将 Phase 2.2 代码推送到线上环境，验证全链路（Excel导入、需求大厅、成交决策）在生产环境的表现。
+2. **前端对接**: 微信小程序或 Web UI 对接新的 API。
+3. **博弈质量观察**: 持续观察 Qclaw 与 WorkBuddy 的协商逻辑是否自然。
+4. **503 冷启动优化**: 考虑轻量级预热方案。
+5. **增加测试覆盖率**: 将 smoke_test.py 迁移到 pytest，添加 GitHub Actions CI 自动测试。|
 
-## 新对话接管提示词
+---
 
-如果旧对话继续报 compact 错误，可以在新对话中使用：
+## 历史关键转折
 
-```text
-请接管这个项目：
-/Users/fuhongbo/Documents/Antigravity/项目对比/used-car-a2a-vnext
+### 数据库路线 (2026-04-26)
+- 放弃 CloudBase SQL / MySQL + 私有网络路线（月费约 179 元）。
+- 确立 **SQLite-first** 方案，配合单实例云托管和手动备份脚本。
 
-先阅读：
-- PROJECT_HANDOFF.md
-- CODEX_CLOUD_HANDOFF.md
-- README.md
-- DEPLOY_CLOUDBASE.md
-- SQLITE_OPERATIONS.md
-- MVP_AGENT_TEST_PROMPTS.md
+### Agent 优化 (2026-04-27)
+- 引入 `PriceEvaluator` 和 `_calculate_offer_price` 逻辑，修复了离谱报价（如 13万的车报 2万）的 Bug。
+- 实现了买家动态递增出价和卖家结构化车况模板。
 
-关键决策：
-- 不升级 CloudBase 套餐
-- 不走 CloudBase SQL / MySQL + 私有网络
-- 当前采用 SQLite-first
-- 系统不绑定 Qclaw / WorkBuddy，任意支持 Skill / OpenAPI / HTTP JSON 的 Agent 都可以接入
-- 最近线上已部署提交是 3f8efb2
+## GitHub 与线上状态
 
-当前任务：
-1. 确认 GitHub main 是否已包含 `cd52cde` 或之后提交。
-2. 如果未包含，先推送本地 main 到 GitHub。
-3. 部署 Phase 2.1 前先执行线上 SQLite 备份。
-4. 部署后运行 `scripts/online_match_test.py` 验证 match -> session 链路。
-```
+GitHub 仓库：`https://github.com/iiiiihb66/used-car-a2a-vnext`
+当前 `main` 分支状态：待提交 Phase 2.2 变更（上次已同步 Hash `b9adcf3`）。
 
-## 给其他 AI 的接管要求
+线上服务：
+- 环境 ID: `car-assistant-prod-3dqle77ef680c`
+- 服务名: `used-car-a2a-vnext`
+- 模式: `mode=tool` (单实例 SQLite)
 
-接管后先执行：
+---
 
-```bash
-git status --short
-git log -5 --oneline
-```
+## 给接管 AI 的指令
 
-如果要部署 CloudBase：
-
-1. 先执行线上 SQLite 备份。
-2. 再运行 `scripts/deploy_cloudbase_clean.sh`。
-3. 部署后检查 `/openapi.json` 和 `/skill.md` 是否为新版本。
-4. 部署后再下载一次 SQLite 备份。
-
-不要做：
-
-1. 不要提交 `.secrets/`。
-2. 不要提交 `.env`。
-3. 不要提交 `data/*.db` 或 `backups/`。
-4. 不要重新引导用户开 CloudBase MySQL / 私有网络付费能力。
-5. 不要把当前 SQLite 方案误认为生产级长期数据库方案。
+1. **先做同步**: 执行 `./scripts/ensure_latest.sh`。
+2. **严守底线**: 不得引入支付、贷款等金融敏感功能（详见 `AGENTS.md`）。
+3. **备份为先**: 任何涉及数据库结构或生产部署的操作，必须先运行 `scripts/cloud_sqlite_backup.py download`。
